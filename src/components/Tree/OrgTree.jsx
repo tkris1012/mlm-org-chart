@@ -190,61 +190,81 @@ export default function OrgTree() {
     return best
   }
 
-  // ── 背景パン＆ピンチズーム（pointer events）─────────────
+  // ── 背景パン＆ピンチズーム（window レベルのリスナーで堅牢実装）─
+  // setPointerCapture を使わず、window 上の pointermove/pointerup を必ず捕捉する
+  useEffect(() => {
+    const onWinMove = (ev) => {
+      const ptrs = bgPointersRef.current
+      if (!ptrs.has(ev.pointerId)) return
+
+      if (ptrs.size === 1) {
+        // シングルポインター → パン
+        if (pointerRef.current?.moved) {
+          ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
+          return
+        }
+        if (!bgPanRef.current) return
+        const dx = ev.clientX - bgPanRef.current.startX
+        const dy = ev.clientY - bgPanRef.current.startY
+        setTfm((t) => ({ ...t, x: bgPanRef.current.startTx + dx, y: bgPanRef.current.startTy + dy }))
+      } else if (ptrs.size === 2) {
+        // ピンチズーム
+        const entries = [...ptrs.entries()]
+        const [id1, pos1] = entries[0]
+        const [id2, pos2] = entries[1]
+        const cur1 = id1 === ev.pointerId ? { x: ev.clientX, y: ev.clientY } : pos1
+        const cur2 = id2 === ev.pointerId ? { x: ev.clientX, y: ev.clientY } : pos2
+        const prevDist = Math.hypot(pos1.x - pos2.x, pos1.y - pos2.y)
+        const curDist  = Math.hypot(cur1.x - cur2.x, cur1.y - cur2.y)
+        if (prevDist < 1) { ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); return }
+        const factor = curDist / prevDist
+        if (!svgRef.current) return
+        const rect = svgRef.current.getBoundingClientRect()
+        const midX = (cur1.x + cur2.x) / 2 - rect.left
+        const midY = (cur1.y + cur2.y) / 2 - rect.top
+        setTfm((t) => {
+          const s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale * factor))
+          const r = s / t.scale
+          return { scale: s, x: midX - (midX - t.x) * r, y: midY - (midY - t.y) * r }
+        })
+      }
+      ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
+    }
+
+    const onWinUp = (ev) => {
+      const ptrs = bgPointersRef.current
+      if (!ptrs.has(ev.pointerId)) return
+      ptrs.delete(ev.pointerId)
+      if (ptrs.size === 1) {
+        const [remaining] = [...ptrs.entries()]
+        bgPanRef.current = {
+          startX: remaining[1].x, startY: remaining[1].y,
+          startTx: tfmRef.current.x, startTy: tfmRef.current.y,
+        }
+      } else if (ptrs.size === 0) {
+        bgPanRef.current = null
+      }
+    }
+
+    window.addEventListener('pointermove',   onWinMove)
+    window.addEventListener('pointerup',     onWinUp)
+    window.addEventListener('pointercancel', onWinUp)
+    return () => {
+      window.removeEventListener('pointermove',   onWinMove)
+      window.removeEventListener('pointerup',     onWinUp)
+      window.removeEventListener('pointercancel', onWinUp)
+    }
+  }, [])
+
   function handleBgPointerDown(e) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
     e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
     bgPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-
     if (bgPointersRef.current.size === 1) {
       bgPanRef.current = {
         startX: e.clientX, startY: e.clientY,
         startTx: tfmRef.current.x, startTy: tfmRef.current.y,
       }
-    }
-  }
-
-  function handleBgPointerMove(e) {
-    const ptrs = bgPointersRef.current
-    if (!ptrs.has(e.pointerId)) return
-
-    if (ptrs.size === 1) {
-      if (pointerRef.current?.moved) { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); return }
-      const dx = e.clientX - bgPanRef.current.startX
-      const dy = e.clientY - bgPanRef.current.startY
-      setTfm((t) => ({ ...t, x: bgPanRef.current.startTx + dx, y: bgPanRef.current.startTy + dy }))
-    } else if (ptrs.size === 2) {
-      const entries = [...ptrs.entries()]
-      const [id1, pos1] = entries[0]
-      const [id2, pos2] = entries[1]
-      const cur1 = id1 === e.pointerId ? { x: e.clientX, y: e.clientY } : pos1
-      const cur2 = id2 === e.pointerId ? { x: e.clientX, y: e.clientY } : pos2
-      const prevDist = Math.hypot(pos1.x - pos2.x, pos1.y - pos2.y)
-      const curDist  = Math.hypot(cur1.x - cur2.x, cur1.y - cur2.y)
-      const factor = curDist / (prevDist || 1)
-      const rect = svgRef.current.getBoundingClientRect()
-      const midX = (cur1.x + cur2.x) / 2 - rect.left
-      const midY = (cur1.y + cur2.y) / 2 - rect.top
-      setTfm((t) => {
-        const s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale * factor))
-        const r = s / t.scale
-        return { scale: s, x: midX - (midX - t.x) * r, y: midY - (midY - t.y) * r }
-      })
-    }
-    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY })
-  }
-
-  function handleBgPointerUp(e) {
-    bgPointersRef.current.delete(e.pointerId)
-    if (bgPointersRef.current.size === 1) {
-      const [remaining] = [...bgPointersRef.current.entries()]
-      bgPanRef.current = {
-        startX: remaining[1].x, startY: remaining[1].y,
-        startTx: tfmRef.current.x, startTy: tfmRef.current.y,
-      }
-    } else if (bgPointersRef.current.size === 0) {
-      bgPanRef.current = null
     }
   }
 
@@ -407,13 +427,10 @@ export default function OrgTree() {
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', touchAction: 'none', userSelect: 'none' }}
         onDragStart={(e) => e.preventDefault()}
       >
-        {/* 背景（パン＆ピンチズームのヒットエリア） */}
+        {/* 背景（パン＆ピンチズームのヒットエリア／pointerdownのみ、あとはwindowで処理） */}
         <rect
           width="100%" height="100%" fill="#EBEBEB"
           onPointerDown={handleBgPointerDown}
-          onPointerMove={handleBgPointerMove}
-          onPointerUp={handleBgPointerUp}
-          onPointerCancel={handleBgPointerUp}
         />
 
         <g transform={svgGroupTransform}>
