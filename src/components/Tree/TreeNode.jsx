@@ -62,7 +62,7 @@ export default function TreeNode({ member, isRoot, isDragging }) {
         }}
       >
         {member.photo ? (
-          <img src={member.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src={member.photo} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <DefaultAvatar color={style.border} />
         )}

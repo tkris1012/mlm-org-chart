@@ -66,6 +66,20 @@ export default function OrgTree() {
     return () => window.removeEventListener('keydown', onKey)
   }, [undo])
 
+  // ── mousedown / dragstart の default を防ぐ（ホワイトアウト防止）─
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onMouseDown  = (e) => e.preventDefault()
+    const onDragStart  = (e) => e.preventDefault()
+    el.addEventListener('mousedown', onMouseDown)
+    el.addEventListener('dragstart', onDragStart)
+    return () => {
+      el.removeEventListener('mousedown', onMouseDown)
+      el.removeEventListener('dragstart', onDragStart)
+    }
+  }, [])
+
   // ── ホイールズーム（passive: false）────────────────────────
   useEffect(() => {
     const el = containerRef.current
@@ -467,7 +481,10 @@ export default function OrgTree() {
       </svg>
 
       {/* HTML ノードオーバーレイ（foreignObject の代替 — iOS Safari 対応）*/}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+      <div
+        style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}
+        onDragStart={(e) => e.preventDefault()}
+      >
         <div style={{
           position: 'absolute', top: 0, left: 0,
           transform: groupTransform,
