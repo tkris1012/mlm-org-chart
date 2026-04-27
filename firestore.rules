@@ -2,9 +2,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ユーザーは自分のUID配下のmembersコレクションにのみアクセス可能
+    // メンバー：オーナーは常時 read/write、共有有効時は誰でも read 可能
     match /users/{uid}/members/{memberId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if (request.auth != null && request.auth.uid == uid)
+                  || (exists(/databases/$(database)/documents/users/$(uid)/_meta/share)
+                      && get(/databases/$(database)/documents/users/$(uid)/_meta/share).data.enabled == true);
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 共有設定：read は誰でも（enabled 確認のため）、write はオーナーのみ
+    match /users/{uid}/_meta/share {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 共有トークン：read は誰でも（uid 取得のため）、書き込みはトークンのオーナーのみ
+    match /shareTokens/{token} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
 
     // その他すべて拒否

@@ -27,6 +27,8 @@ export default function OrgTree() {
   const toggleCollapsed = useStore((s) => s.toggleCollapsed)
   const roleFilter      = useStore((s) => s.roleFilter)
   const setRoleFilter   = useStore((s) => s.setRoleFilter)
+  const viewMode        = useStore((s) => s.viewMode)
+  const isReadOnly      = viewMode === 'view'
 
   const { positions, childMap, hiddenChildrenMap } = useTreeLayout()
 
@@ -246,7 +248,8 @@ export default function OrgTree() {
     if (!pointerRef.current.moved && dist > DRAG_THRESHOLD) {
       clearTimeout(longPressTimer.current)
       const id = pointerRef.current.id
-      if (!isRootNode(members[id] ?? {}, members)) {
+      // 閲覧モードではドラッグ移動できない
+      if (!isReadOnly && !isRootNode(members[id] ?? {}, members)) {
         pointerRef.current.moved = true
         const sv = toSVG(e.clientX, e.clientY)
         setDrag({ id, ghostX: sv.x - NODE_W / 2, ghostY: sv.y - 36, overParentId: null, overPosition: null })
@@ -274,7 +277,8 @@ export default function OrgTree() {
     pointerRef.current = null
 
     if (!wasDragging) {
-      if (longPressId !== id) {
+      // 閲覧モードでは編集パネルを開かない
+      if (!isReadOnly && longPressId !== id) {
         setSelectedId(id)
         setPanelOpen(true)
         setLongPressId(null)
@@ -398,19 +402,21 @@ export default function OrgTree() {
       }}
       onDragStart={(e) => e.preventDefault()}
     >
-      {/* ツールバー（左下） */}
-      <div style={{ position: 'absolute', bottom: 16, left: 16, zIndex: 10 }}>
-        <button
-          onClick={addRootNode}
-          style={{
-            background: '#7C3AED', color: 'white', border: 'none', borderRadius: 8,
-            padding: '7px 14px', fontSize: 13, cursor: 'pointer', fontWeight: 600,
-            boxShadow: '0 2px 6px rgba(124,58,237,0.35)',
-          }}
-        >
-          ＋ ルート追加
-        </button>
-      </div>
+      {/* ツールバー（左下） — 閲覧モードでは非表示 */}
+      {!isReadOnly && (
+        <div style={{ position: 'absolute', bottom: 16, left: 16, zIndex: 10 }}>
+          <button
+            onClick={addRootNode}
+            style={{
+              background: '#7C3AED', color: 'white', border: 'none', borderRadius: 8,
+              padding: '7px 14px', fontSize: 13, cursor: 'pointer', fontWeight: 600,
+              boxShadow: '0 2px 6px rgba(124,58,237,0.35)',
+            }}
+          >
+            ＋ ルート追加
+          </button>
+        </div>
+      )}
 
       {/* フィルター（左上） */}
       <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
@@ -520,8 +526,9 @@ export default function OrgTree() {
             const cm  = childMap[id] || {}
             const collapsible = isCollapsible(m)
             const isCollapsed = !!m?.collapsed
-            // 折りたたみ中は子追加できない
-            const showAddButtons = !isCollapsed
+            // 折りたたみ中 or 閲覧モードでは子追加・削除できない
+            const showAddButtons = !isCollapsed && !isReadOnly
+            const showDeleteButton = !isReadOnly
             return (
               <g
                 onPointerEnter={clearHover}
@@ -550,13 +557,15 @@ export default function OrgTree() {
                   </g>
                 )}
                 {/* 🗑️ */}
-                <g style={{ cursor: 'pointer' }} onClick={(e) => handleDeleteClick(e, id)}>
-                  <circle cx={pos.x + NODE_W + 8} cy={pos.y - 8} r={13}
-                    fill="white" stroke="#EF4444" strokeWidth={2} />
-                  <text x={pos.x + NODE_W + 8} y={pos.y - 3}
-                    textAnchor="middle" fontSize={13}
-                    style={{ pointerEvents: 'none' }}>🗑️</text>
-                </g>
+                {showDeleteButton && (
+                  <g style={{ cursor: 'pointer' }} onClick={(e) => handleDeleteClick(e, id)}>
+                    <circle cx={pos.x + NODE_W + 8} cy={pos.y - 8} r={13}
+                      fill="white" stroke="#EF4444" strokeWidth={2} />
+                    <text x={pos.x + NODE_W + 8} y={pos.y - 3}
+                      textAnchor="middle" fontSize={13}
+                      style={{ pointerEvents: 'none' }}>🗑️</text>
+                  </g>
+                )}
                 {/* 折りたたみトグル（PDCM/DCM/ECM のみ、配下が存在する場合） */}
                 {collapsible && (cm.left || cm.right || isCollapsed) && (
                   <g style={{ cursor: 'pointer' }} onClick={(e) => handleToggleCollapsed(e, id)}>

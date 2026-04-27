@@ -56,6 +56,22 @@ export const useStore = create((set, get) => ({
   roleFilter: 'ALL',  // 'ALL' | 'PDCM' | 'DCM' | 'ECM' | 'PM' | 'GM'
   setRoleFilter: (f) => set({ roleFilter: f }),
 
+  // --- View Mode ---
+  viewMode: 'owner',  // 'owner' | 'view'（共有リンクからアクセス時 'view'）
+  setViewMode: (m) => set({ viewMode: m }),
+  viewerName: null,    // 閲覧モード時のオーナー表示名（任意）
+  setViewerName: (n) => set({ viewerName: n }),
+
+  // --- Share ---
+  shareConfig: null,  // { enabled, token } | null
+  setShareConfig: (c) => set({ shareConfig: c }),
+
+  // 閲覧者の折りたたみオーバーライド（Firestore に書き込まないローカル状態）
+  viewerCollapse: {},  // { [memberId]: boolean }
+  setViewerCollapse: (id, v) => set((s) => ({
+    viewerCollapse: { ...s.viewerCollapse, [id]: v },
+  })),
+
   // --- Confirm Dialog ---
   confirm: null,        // { message, onOk } | null
   showConfirm: (message, onOk) => set({ confirm: { message, onOk } }),
@@ -140,12 +156,22 @@ export const useStore = create((set, get) => ({
 
   // ECM以上の下位表示／非表示トグル
   toggleCollapsed: async (memberId) => {
-    const { user, members, setSyncStatus } = get()
-    if (!user) return
+    const { user, viewMode, members, viewerCollapse, setSyncStatus } = get()
     const cur = members[memberId]
     if (!cur) return
+
+    // 閲覧モード：ローカルのオーバーライドだけ更新（Firestore は触らない）
+    if (viewMode === 'view') {
+      const curOverride = memberId in viewerCollapse ? viewerCollapse[memberId] : !!cur.collapsed
+      set((s) => ({
+        viewerCollapse: { ...s.viewerCollapse, [memberId]: !curOverride },
+      }))
+      return
+    }
+
+    // オーナーモード：Firestore へ永続化
+    if (!user) return
     const next = !cur.collapsed
-    // 楽観的更新
     set((s) => ({
       members: { ...s.members, [memberId]: { ...s.members[memberId], collapsed: next } },
     }))
@@ -154,7 +180,6 @@ export const useStore = create((set, get) => ({
       await updateMember(user.uid, memberId, { collapsed: next })
     } catch (e) {
       console.error('toggleCollapsed failed', e)
-      // ロールバック
       set((s) => ({
         members: { ...s.members, [memberId]: { ...s.members[memberId], collapsed: cur.collapsed } },
       }))

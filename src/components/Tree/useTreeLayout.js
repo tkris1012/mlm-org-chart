@@ -8,9 +8,24 @@ export const GAP_X = 14
 export const GAP_Y = 54
 
 export function useTreeLayout() {
-  const members    = useStore((s) => s.members)
-  const roleFilter = useStore((s) => s.roleFilter)
-  return useMemo(() => computeLayout(members, roleFilter), [members, roleFilter])
+  const members        = useStore((s) => s.members)
+  const roleFilter     = useStore((s) => s.roleFilter)
+  const viewMode       = useStore((s) => s.viewMode)
+  const viewerCollapse = useStore((s) => s.viewerCollapse)
+
+  // 閲覧モードでは viewerCollapse のオーバーライドを適用
+  const effective = useMemo(() => {
+    if (viewMode !== 'view') return members
+    const result = {}
+    Object.keys(members).forEach((id) => {
+      const m = members[id]
+      const collapsed = id in viewerCollapse ? viewerCollapse[id] : !!m.collapsed
+      result[id] = { ...m, collapsed }
+    })
+    return result
+  }, [members, viewMode, viewerCollapse])
+
+  return useMemo(() => computeLayout(effective, roleFilter), [effective, roleFilter])
 }
 
 export function computeLayout(members, roleFilter = 'ALL') {
