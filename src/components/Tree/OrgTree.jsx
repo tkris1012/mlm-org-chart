@@ -58,6 +58,9 @@ export default function OrgTree() {
   // Touch pinch
   const touchRef = useRef({ touches: [] })
 
+  // Touch 1-finger pan（Phase 1: スマホ対応）
+  const touchPanRef = useRef(null) // { startX, startY, startTx, startTy }
+
   // ── キーボードショートカット ───────────────────────────────
   useEffect(() => {
     const onKey = (e) => {
@@ -265,11 +268,39 @@ export default function OrgTree() {
     }
   }
 
-  // ── タッチピンチズーム ─────────────────────────────────────
-  function handleTouchStart(e) { touchRef.current.touches = Array.from(e.touches) }
+  // ── タッチピンチズーム ＋ 1本指パン（Phase 1）────────────
+  function handleTouchStart(e) {
+    touchRef.current.touches = Array.from(e.touches)
+    // 1本指 → パン基準を記録
+    if (e.touches.length === 1) {
+      touchPanRef.current = {
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        startTx: tfmRef.current.x,
+        startTy: tfmRef.current.y,
+      }
+    } else {
+      touchPanRef.current = null
+    }
+  }
   function handleTouchMove(e) {
     const cur = Array.from(e.touches), prev = touchRef.current.touches
-    if (cur.length === 2 && prev.length === 2) {
+
+    // 1本指パン
+    if (cur.length === 1 && touchPanRef.current) {
+      // ノードドラッグ中はパンしない
+      if (!pointerRef.current?.moved) {
+        const dx = cur[0].clientX - touchPanRef.current.startX
+        const dy = cur[0].clientY - touchPanRef.current.startY
+        setTfm((t) => ({
+          ...t,
+          x: touchPanRef.current.startTx + dx,
+          y: touchPanRef.current.startTy + dy,
+        }))
+      }
+    }
+    // 2本指ピンチズーム（既存）
+    else if (cur.length === 2 && prev.length === 2) {
       const prevDist = Math.hypot(prev[0].clientX - prev[1].clientX, prev[0].clientY - prev[1].clientY)
       const curDist  = Math.hypot(cur[0].clientX  - cur[1].clientX,  cur[0].clientY  - cur[1].clientY)
       const factor = curDist / (prevDist || 1)
@@ -283,6 +314,20 @@ export default function OrgTree() {
       })
     }
     touchRef.current.touches = cur
+  }
+  function handleTouchEnd(e) {
+    touchRef.current.touches = Array.from(e.touches)
+    if (e.touches.length === 0) {
+      touchPanRef.current = null
+    } else if (e.touches.length === 1) {
+      // 2本→1本に戻った時、パン基準を残った指でリセット
+      touchPanRef.current = {
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        startTx: tfmRef.current.x,
+        startTy: tfmRef.current.y,
+      }
+    }
   }
 
   // ── ＋ / 🗑️ ボタン ────────────────────────────────────────
@@ -373,6 +418,8 @@ export default function OrgTree() {
         onDragStart={(e) => e.preventDefault()}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         {/* SVG背景（明示的に塗る） */}
         <rect width="100%" height="100%" fill="#EBEBEB" />
@@ -424,6 +471,7 @@ export default function OrgTree() {
                 onPointerDown={(e) => handleNodePointerDown(e, m.id)}
                 onPointerMove={handleNodePointerMove}
                 onPointerUp={(e) => handleNodePointerUp(e, m.id)}
+                onTouchStart={(e) => e.stopPropagation()}
               />
             )
           })}
