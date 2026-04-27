@@ -525,8 +525,10 @@ export default function OrgTree() {
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
         <div style={{
           position: 'absolute', top: 0, left: 0,
-          transform: `translate(${tfm.x}px, ${tfm.y}px) scale(${tfm.scale})`,
+          transform: `translate3d(${tfm.x}px, ${tfm.y}px, 0) scale(${tfm.scale})`,
           transformOrigin: '0 0',
+          willChange: 'transform',
+          WebkitBackfaceVisibility: 'hidden',
         }}>
           {Object.values(members).map((m) => {
             const pos = positions[m.id]
