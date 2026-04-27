@@ -91,6 +91,16 @@ export default function OrgTree() {
     return () => el.removeEventListener('wheel', handler)
   }, [])
 
+  // ── iOS Safari の慣性スワイプを防ぐ（passive: false の native touchmove）─
+  // React の onTouchMove は passive なので preventDefault が効かない
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onTouchMove = (e) => { e.preventDefault() }
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => el.removeEventListener('touchmove', onTouchMove)
+  }, [])
+
   // ── パン操作（ネイティブ mousedown でブラッグゴースト完全防止）─
   useEffect(() => {
     const el = containerRef.current
