@@ -14,6 +14,7 @@ export default function DetailPanel() {
 
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
+  const [job, setJob]   = useState('')
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -26,6 +27,7 @@ export default function DetailPanel() {
     if (member) {
       setName(member.name || '')
       setRole(member.role || '')
+      setJob(member.job || '')
       setPhoto(null)
       setPhotoPreview(member.photo || null)
     }
@@ -59,7 +61,7 @@ export default function DetailPanel() {
     if (!name.trim()) { alert('名前を入力してください'); return }
     setSaving(true)
     try {
-      const updates = { name: name.trim(), role }
+      const updates = { name: name.trim(), role, job: job.trim() }
       if (photo !== null) updates.photo = photo || null
       await saveNode(selectedId, updates)
       setPanelOpen(false)
@@ -172,9 +174,27 @@ export default function DetailPanel() {
             />
           </label>
 
-          {/* Role */}
+          {/* Job */}
+          <label style={{ display: 'block', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 6 }}>職業</div>
+            <input
+              type="text"
+              value={job}
+              onChange={(e) => setJob(e.target.value)}
+              placeholder="職業を入力（任意）"
+              style={{
+                width: '100%', padding: '8px 12px', borderRadius: 8,
+                border: '1px solid #D1D5DB', fontSize: 15, outline: 'none',
+                boxSizing: 'border-box',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#7C3AED'}
+              onBlur={(e) => e.target.style.borderColor = '#D1D5DB'}
+            />
+          </label>
+
+          {/* Title (旧 役職) */}
           <label style={{ display: 'block', marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 6 }}>役職</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 6 }}>タイトル</div>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
@@ -186,7 +206,7 @@ export default function DetailPanel() {
             >
               {ROLE_OPTIONS.map((r) => (
                 <option key={r} value={r}>
-                  {r || '（役職なし）'}
+                  {r || '（タイトルなし）'}
                 </option>
               ))}
             </select>

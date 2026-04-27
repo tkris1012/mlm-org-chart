@@ -5,6 +5,7 @@ export default function TreeNode({ member, isRoot, isDragging }) {
   if (!member) return null
   const style = getRoleStyle(member.role)
   const hasRole = !!member.role
+  const hasJob  = !!member.job
 
   return (
     <div
@@ -106,6 +107,21 @@ export default function TreeNode({ member, isRoot, isDragging }) {
         >
           {member.name || '（名前なし）'}
         </div>
+        {hasJob && (
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 400,
+              color: style.sub,
+              lineHeight: 1.2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {member.job}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -13,7 +13,7 @@ export function useTreeLayout() {
 
 export function computeLayout(members) {
   const ids = Object.keys(members)
-  if (!ids.length) return { positions: {}, childMap: {}, roots: [] }
+  if (!ids.length) return { positions: {}, childMap: {}, roots: [], hiddenChildrenMap: {} }
 
   // Build child map: { [id]: { left: id|null, right: id|null } }
   const childMap = {}
@@ -26,6 +26,39 @@ export function computeLayout(members) {
       roots.push(id)
     } else {
       childMap[m.parentId][m.position] = id
+    }
+  })
+
+  // 折りたたまれたノードの配下を非表示にする
+  // - visibleIds: 表示対象のノードID集合
+  // - hiddenChildrenMap: 折りたたみ中で非表示の子を持つノード { [id]: count }
+  const visibleIds = new Set()
+  const hiddenChildrenMap = {}
+  const queue = [...roots]
+  while (queue.length) {
+    const id = queue.shift()
+    visibleIds.add(id)
+    const m = members[id]
+    const { left, right } = childMap[id] || {}
+    const childCount = (left ? 1 : 0) + (right ? 1 : 0)
+    if (m?.collapsed && childCount > 0) {
+      // 配下は非表示。配下の総数を集計
+      const allDesc = collectDescendants(childMap, id)
+      hiddenChildrenMap[id] = allDesc.length
+    } else {
+      if (left) queue.push(left)
+      if (right) queue.push(right)
+    }
+  }
+
+  // 非表示ノードは childMap から外す（レイアウト計算で扱わない）
+  Object.keys(childMap).forEach((id) => {
+    if (!visibleIds.has(id)) {
+      delete childMap[id]
+    } else {
+      const cm = childMap[id]
+      if (cm.left && !visibleIds.has(cm.left))   cm.left  = null
+      if (cm.right && !visibleIds.has(cm.right)) cm.right = null
     }
   })
 
@@ -67,7 +100,7 @@ export function computeLayout(members) {
   // Convert to pixel positions
   const positions = {}
   ids.forEach((id) => {
-    if (cols[id] != null) {
+    if (cols[id] != null && visibleIds.has(id)) {
       positions[id] = {
         x: cols[id] * (NODE_W + GAP_X),
         y: depths[id] * (NODE_H + GAP_Y),
@@ -75,7 +108,7 @@ export function computeLayout(members) {
     }
   })
 
-  return { positions, childMap, roots }
+  return { positions, childMap, roots, hiddenChildrenMap }
 }
 
 // Collect all descendant IDs of a given node

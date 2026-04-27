@@ -22,9 +22,14 @@ export default function OrgTree() {
   const deleteNode    = useStore((s) => s.deleteNode)
   const moveNode      = useStore((s) => s.moveNode)
   const addRootNode   = useStore((s) => s.addRootNode)
-  const undo          = useStore((s) => s.undo)
+  const undo            = useStore((s) => s.undo)
+  const toggleCollapsed = useStore((s) => s.toggleCollapsed)
 
-  const { positions, childMap } = useTreeLayout()
+  const { positions, childMap, hiddenChildrenMap } = useTreeLayout()
+
+  // 折りたたみトグル可能なロール
+  const COLLAPSIBLE_ROLES = ['PDCM', 'DCM', 'ECM']
+  const isCollapsible = (m) => m && COLLAPSIBLE_ROLES.includes(m.role)
   const containerRef = useRef(null)
   const svgRef       = useRef(null)
 
@@ -342,7 +347,7 @@ export default function OrgTree() {
     }
   }
 
-  // ── ＋ / 🗑️ ボタン ────────────────────────────────────────
+  // ── ＋ / 🗑️ / 折りたたみトグル ボタン ────────────────────
   function handleAddClick(e, parentId, position) {
     e.stopPropagation()
     clearHover(); setHoveredId(null); setLongPressId(null)
@@ -352,6 +357,11 @@ export default function OrgTree() {
     e.stopPropagation()
     clearHover(); setHoveredId(null); setLongPressId(null)
     deleteNode(id)
+  }
+  function handleToggleCollapsed(e, id) {
+    e.stopPropagation()
+    clearHover(); setHoveredId(null); setLongPressId(null)
+    toggleCollapsed(id)
   }
 
   // ── エッジ ────────────────────────────────────────────────
@@ -477,8 +487,13 @@ export default function OrgTree() {
           {/* ホバー／長押しコントロール */}
           {activeControlId && positions[activeControlId] && !drag && (() => {
             const id  = activeControlId
+            const m   = members[id]
             const pos = positions[id]
             const cm  = childMap[id] || {}
+            const collapsible = isCollapsible(m)
+            const isCollapsed = !!m?.collapsed
+            // 折りたたみ中は子追加できない
+            const showAddButtons = !isCollapsed
             return (
               <g
                 onPointerEnter={clearHover}
@@ -487,7 +502,7 @@ export default function OrgTree() {
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* ＋左 */}
-                {!cm.left && (
+                {showAddButtons && !cm.left && (
                   <g style={{ cursor: 'pointer' }} onClick={(e) => handleAddClick(e, id, 'left')}>
                     <circle cx={pos.x + NODE_W * 0.28} cy={pos.y + 72 + 22} r={14}
                       fill="white" stroke="#10B981" strokeWidth={2} />
@@ -497,7 +512,7 @@ export default function OrgTree() {
                   </g>
                 )}
                 {/* ＋右 */}
-                {!cm.right && (
+                {showAddButtons && !cm.right && (
                   <g style={{ cursor: 'pointer' }} onClick={(e) => handleAddClick(e, id, 'right')}>
                     <circle cx={pos.x + NODE_W * 0.72} cy={pos.y + 72 + 22} r={14}
                       fill="white" stroke="#10B981" strokeWidth={2} />
@@ -514,9 +529,43 @@ export default function OrgTree() {
                     textAnchor="middle" fontSize={13}
                     style={{ pointerEvents: 'none' }}>🗑️</text>
                 </g>
+                {/* 折りたたみトグル（PDCM/DCM/ECM のみ、配下が存在する場合） */}
+                {collapsible && (cm.left || cm.right || isCollapsed) && (
+                  <g style={{ cursor: 'pointer' }} onClick={(e) => handleToggleCollapsed(e, id)}>
+                    <circle cx={pos.x - 8} cy={pos.y - 8} r={13}
+                      fill="white" stroke="#6B7280" strokeWidth={2} />
+                    <text x={pos.x - 8} y={pos.y - 4}
+                      textAnchor="middle" fontSize={12} fill="#374151"
+                      style={{ pointerEvents: 'none' }}>{isCollapsed ? '▶' : '▼'}</text>
+                  </g>
+                )}
               </g>
             )
           })()}
+
+          {/* 折りたたみ中の常時表示 ▼ バッジ（ノード下中央） */}
+          {Object.values(members).map((m) => {
+            const pos = positions[m.id]
+            if (!pos) return null
+            const hiddenCount = hiddenChildrenMap[m.id]
+            if (!hiddenCount) return null
+            return (
+              <g key={`badge-${m.id}`} style={{ cursor: 'pointer' }}
+                onClick={(e) => handleToggleCollapsed(e, m.id)}
+                onPointerDown={(e) => e.stopPropagation()}>
+                <rect
+                  x={pos.x + NODE_W / 2 - 22} y={pos.y + 72 + 4}
+                  width={44} height={20} rx={10}
+                  fill="white" stroke="#6B7280" strokeWidth={1.5}
+                />
+                <text
+                  x={pos.x + NODE_W / 2} y={pos.y + 72 + 18}
+                  textAnchor="middle" fontSize={11} fill="#374151" fontWeight={600}
+                  style={{ pointerEvents: 'none' }}
+                >▼ {hiddenCount}</text>
+              </g>
+            )
+          })}
 
           {/* ドラッグゴーストも HTML オーバーレイで描画 */}
 

@@ -117,9 +117,11 @@ export const useStore = create((set, get) => ({
     const data = {
       name: '新メンバー',
       role: '',
+      job: '',
       photo: null,
       parentId: parentId ?? null,
       position: position ?? null,
+      collapsed: false,
     }
 
     try {
@@ -127,6 +129,31 @@ export const useStore = create((set, get) => ({
       set({ selectedId: newId, panelOpen: true })
     } catch (e) {
       console.error('addNode failed', e)
+    } finally {
+      setSyncStatus('synced')
+    }
+  },
+
+  // ECM以上の下位表示／非表示トグル
+  toggleCollapsed: async (memberId) => {
+    const { user, members, setSyncStatus } = get()
+    if (!user) return
+    const cur = members[memberId]
+    if (!cur) return
+    const next = !cur.collapsed
+    // 楽観的更新
+    set((s) => ({
+      members: { ...s.members, [memberId]: { ...s.members[memberId], collapsed: next } },
+    }))
+    setSyncStatus('syncing')
+    try {
+      await updateMember(user.uid, memberId, { collapsed: next })
+    } catch (e) {
+      console.error('toggleCollapsed failed', e)
+      // ロールバック
+      set((s) => ({
+        members: { ...s.members, [memberId]: { ...s.members[memberId], collapsed: cur.collapsed } },
+      }))
     } finally {
       setSyncStatus('synced')
     }
@@ -249,9 +276,11 @@ export const useStore = create((set, get) => ({
       const newId = await addMember(user.uid, {
         name: '新メンバー',
         role: '',
+        job: '',
         photo: null,
         parentId: null,
         position: null,
+        collapsed: false,
       })
       set({ selectedId: newId, panelOpen: true })
     } catch (e) {
