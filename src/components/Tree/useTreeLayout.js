@@ -14,15 +14,39 @@ export function useTreeLayout() {
 }
 
 export function computeLayout(members, roleFilter = 'ALL') {
-  // タイトルフィルター適用：rank が選択値以上のメンバーだけ残す
+  // タイトルフィルター適用：マッチするメンバー＋その祖先を残す（組織の連結性を維持）
   if (roleFilter && roleFilter !== 'ALL') {
     const minRank = ROLE_RANK[roleFilter] ?? 0
-    const filtered = {}
-    Object.keys(members).forEach((id) => {
+    // 親→子のマップを構築
+    const childList = {}
+    Object.values(members).forEach((m) => {
+      if (m.parentId && members[m.parentId]) {
+        if (!childList[m.parentId]) childList[m.parentId] = []
+        childList[m.parentId].push(m.id)
+      }
+    })
+    // DFS: 自身がマッチ または 配下にマッチがある なら visible
+    const visible = new Set()
+    function visit(id) {
       const m = members[id]
       const rank = ROLE_RANK[m.role] ?? 0
-      if (rank >= minRank) filtered[id] = m
+      let hasMatchDesc = false
+      for (const c of childList[id] || []) {
+        if (visit(c)) hasMatchDesc = true
+      }
+      if (rank >= minRank || hasMatchDesc) {
+        visible.add(id)
+        return true
+      }
+      return false
+    }
+    // ルートからDFS
+    Object.values(members).forEach((m) => {
+      if (!m.parentId || !members[m.parentId]) visit(m.id)
     })
+    // visible だけ残す
+    const filtered = {}
+    visible.forEach((id) => { filtered[id] = members[id] })
     members = filtered
   }
   const ids = Object.keys(members)
