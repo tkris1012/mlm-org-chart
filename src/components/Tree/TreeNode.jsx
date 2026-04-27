@@ -21,9 +21,6 @@ export default function TreeNode({ member, isRoot, isDragging }) {
         opacity: isDragging ? 0.4 : 1,
         boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
         userSelect: 'none',
-        WebkitUserSelect: 'none',
-        WebkitTouchCallout: 'none',
-        WebkitUserDrag: 'none',
         overflow: 'visible',
         pointerEvents: 'none', // SVGのoverlay rectにイベントを委譲
       }}
@@ -65,7 +62,7 @@ export default function TreeNode({ member, isRoot, isDragging }) {
         }}
       >
         {member.photo ? (
-          <img src={member.photo} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src={member.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <DefaultAvatar color={style.border} />
         )}

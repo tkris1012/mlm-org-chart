@@ -34,8 +34,8 @@ export default function OrgTree() {
   useEffect(() => { tfmRef.current = tfm }, [tfm])
 
   // Hover
-  const [hoveredId, setHoveredId] = useState(null)
-  const hoverTimer                 = useRef(null)
+  const [hoveredId, setHoveredId]   = useState(null)
+  const hoverTimer                   = useRef(null)
 
   // Mobile long press
   const [longPressId, setLongPressId] = useState(null)
@@ -52,9 +52,11 @@ export default function OrgTree() {
   // Click vs drag
   const pointerRef = useRef(null) // { id, startX, startY, moved }
 
-  // 背景パン＆ピンチズーム用
-  const bgPanRef      = useRef(null)
-  const bgPointersRef = useRef(new Map()) // pointerId → { x, y }
+  // ノード上にいるかフラグ（パンとの排他制御）
+  const onNodeRef = useRef(false)
+
+  // Touch pinch
+  const touchRef = useRef({ touches: [] })
 
   // ── キーボードショートカット ───────────────────────────────
   useEffect(() => {
@@ -65,33 +67,6 @@ export default function OrgTree() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [undo])
-
-  // ── ブラウザ既定動作を包括的に防ぐ（ホワイトアウト防止）────
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const prevent = (e) => e.preventDefault()
-    // ボタン以外の touchstart / touchmove を prevent（iOS スクロール・バウンス防止）
-    const preventTouch = (e) => {
-      if (e.target.closest('button')) return
-      e.preventDefault()
-    }
-    el.addEventListener('mousedown',   prevent)
-    el.addEventListener('dragstart',   prevent)
-    el.addEventListener('contextmenu', prevent)
-    el.addEventListener('touchstart',  preventTouch, { passive: false })
-    el.addEventListener('touchmove',   preventTouch, { passive: false })
-    // document レベルでも dragstart を防ぐ
-    document.addEventListener('dragstart', prevent)
-    return () => {
-      el.removeEventListener('mousedown',   prevent)
-      el.removeEventListener('dragstart',   prevent)
-      el.removeEventListener('contextmenu', prevent)
-      el.removeEventListener('touchstart',  preventTouch)
-      el.removeEventListener('touchmove',   preventTouch)
-      document.removeEventListener('dragstart', prevent)
-    }
-  }, [])
 
   // ── ホイールズーム（passive: false）────────────────────────
   useEffect(() => {
@@ -111,6 +86,37 @@ export default function OrgTree() {
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
+  }, [])
+
+  // ── パン操作（ネイティブ mousedown でブラッグゴースト完全防止）─
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    const onMouseDown = (e) => {
+      if (e.button !== 0) return
+      if (onNodeRef.current) { onNodeRef.current = false; return }
+      e.preventDefault() // ブラウザのドラッグ幽霊画像・テキスト選択を防ぐ
+      const start = { x: e.clientX, y: e.clientY, tx: tfmRef.current.x, ty: tfmRef.current.y }
+
+      const onMouseMove = (ev) => {
+        if (pointerRef.current?.moved) return // ノードドラッグ中はパンしない
+        setTfm((t) => ({
+          ...t,
+          x: start.tx + (ev.clientX - start.x),
+          y: start.ty + (ev.clientY - start.y),
+        }))
+      }
+      const onMouseUp = () => {
+        window.removeEventListener('mousemove', onMouseMove)
+        window.removeEventListener('mouseup', onMouseUp)
+      }
+      window.addEventListener('mousemove', onMouseMove)
+      window.addEventListener('mouseup', onMouseUp)
+    }
+
+    el.addEventListener('mousedown', onMouseDown)
+    return () => el.removeEventListener('mousedown', onMouseDown)
   }, [])
 
   // ── 初回データ読み込み時に全体表示 ────────────────────────
@@ -190,88 +196,11 @@ export default function OrgTree() {
     return best
   }
 
-  // ── 背景パン＆ピンチズーム（window レベルのリスナーで堅牢実装）─
-  // setPointerCapture を使わず、window 上の pointermove/pointerup を必ず捕捉する
-  useEffect(() => {
-    const onWinMove = (ev) => {
-      const ptrs = bgPointersRef.current
-      if (!ptrs.has(ev.pointerId)) return
-
-      if (ptrs.size === 1) {
-        // シングルポインター → パン
-        if (pointerRef.current?.moved) {
-          ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
-          return
-        }
-        if (!bgPanRef.current) return
-        const dx = ev.clientX - bgPanRef.current.startX
-        const dy = ev.clientY - bgPanRef.current.startY
-        setTfm((t) => ({ ...t, x: bgPanRef.current.startTx + dx, y: bgPanRef.current.startTy + dy }))
-      } else if (ptrs.size === 2) {
-        // ピンチズーム
-        const entries = [...ptrs.entries()]
-        const [id1, pos1] = entries[0]
-        const [id2, pos2] = entries[1]
-        const cur1 = id1 === ev.pointerId ? { x: ev.clientX, y: ev.clientY } : pos1
-        const cur2 = id2 === ev.pointerId ? { x: ev.clientX, y: ev.clientY } : pos2
-        const prevDist = Math.hypot(pos1.x - pos2.x, pos1.y - pos2.y)
-        const curDist  = Math.hypot(cur1.x - cur2.x, cur1.y - cur2.y)
-        if (prevDist < 1) { ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); return }
-        const factor = curDist / prevDist
-        if (!svgRef.current) return
-        const rect = svgRef.current.getBoundingClientRect()
-        const midX = (cur1.x + cur2.x) / 2 - rect.left
-        const midY = (cur1.y + cur2.y) / 2 - rect.top
-        setTfm((t) => {
-          const s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale * factor))
-          const r = s / t.scale
-          return { scale: s, x: midX - (midX - t.x) * r, y: midY - (midY - t.y) * r }
-        })
-      }
-      ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
-    }
-
-    const onWinUp = (ev) => {
-      const ptrs = bgPointersRef.current
-      if (!ptrs.has(ev.pointerId)) return
-      ptrs.delete(ev.pointerId)
-      if (ptrs.size === 1) {
-        const [remaining] = [...ptrs.entries()]
-        bgPanRef.current = {
-          startX: remaining[1].x, startY: remaining[1].y,
-          startTx: tfmRef.current.x, startTy: tfmRef.current.y,
-        }
-      } else if (ptrs.size === 0) {
-        bgPanRef.current = null
-      }
-    }
-
-    window.addEventListener('pointermove',   onWinMove)
-    window.addEventListener('pointerup',     onWinUp)
-    window.addEventListener('pointercancel', onWinUp)
-    return () => {
-      window.removeEventListener('pointermove',   onWinMove)
-      window.removeEventListener('pointerup',     onWinUp)
-      window.removeEventListener('pointercancel', onWinUp)
-    }
-  }, [])
-
-  function handleBgPointerDown(e) {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    e.preventDefault()
-    bgPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    if (bgPointersRef.current.size === 1) {
-      bgPanRef.current = {
-        startX: e.clientX, startY: e.clientY,
-        startTx: tfmRef.current.x, startTy: tfmRef.current.y,
-      }
-    }
-  }
-
   // ── ノードポインターイベント ──────────────────────────────
   function handleNodePointerDown(e, id) {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault()        // ブラウザのドラッグ幽霊画像を防ぐ
+    e.stopPropagation()       // mousedown がコンテナに届かないようにする
+    onNodeRef.current = true
     setLongPressId(null)
     pointerRef.current = { id, startX: e.clientX, startY: e.clientY, moved: false }
 
@@ -316,6 +245,7 @@ export default function OrgTree() {
 
   function handleNodePointerUp(e, id) {
     clearTimeout(longPressTimer.current)
+    onNodeRef.current = false
     if (!pointerRef.current) return
     const wasDragging = pointerRef.current.moved
     pointerRef.current = null
@@ -333,6 +263,26 @@ export default function OrgTree() {
       }
       setDrag(null)
     }
+  }
+
+  // ── タッチピンチズーム ─────────────────────────────────────
+  function handleTouchStart(e) { touchRef.current.touches = Array.from(e.touches) }
+  function handleTouchMove(e) {
+    const cur = Array.from(e.touches), prev = touchRef.current.touches
+    if (cur.length === 2 && prev.length === 2) {
+      const prevDist = Math.hypot(prev[0].clientX - prev[1].clientX, prev[0].clientY - prev[1].clientY)
+      const curDist  = Math.hypot(cur[0].clientX  - cur[1].clientX,  cur[0].clientY  - cur[1].clientY)
+      const factor = curDist / (prevDist || 1)
+      const rect = svgRef.current.getBoundingClientRect()
+      const midX = (cur[0].clientX + cur[1].clientX) / 2 - rect.left
+      const midY = (cur[0].clientY + cur[1].clientY) / 2 - rect.top
+      setTfm((t) => {
+        const s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale * factor))
+        const r = s / t.scale
+        return { scale: s, x: midX - (midX - t.x) * r, y: midY - (midY - t.y) * r }
+      })
+    }
+    touchRef.current.touches = cur
   }
 
   // ── ＋ / 🗑️ ボタン ────────────────────────────────────────
@@ -365,10 +315,6 @@ export default function OrgTree() {
   const activeControlId = hoveredId || longPressId
   const isEmpty         = Object.keys(members).length === 0
 
-  // CSS transform 文字列（HTML overlay と SVG group で共通）
-  const groupTransform = `translate(${tfm.x}px, ${tfm.y}px) scale(${tfm.scale})`
-  const svgGroupTransform = `translate(${tfm.x},${tfm.y}) scale(${tfm.scale})`
-
   // ── レンダー ──────────────────────────────────────────────
   return (
     <div
@@ -376,7 +322,7 @@ export default function OrgTree() {
       style={{
         width: '100%', height: '100%', position: 'relative',
         overflow: 'hidden', background: '#EBEBEB',
-        userSelect: 'none', touchAction: 'none',
+        userSelect: 'none',
       }}
       onDragStart={(e) => e.preventDefault()}
     >
@@ -421,19 +367,18 @@ export default function OrgTree() {
         </div>
       )}
 
-      {/* SVG — エッジ・ドロップゾーン・インタラクション overlay */}
       <svg
         ref={svgRef}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', touchAction: 'none', userSelect: 'none' }}
+        style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none', userSelect: 'none' }}
         onDragStart={(e) => e.preventDefault()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
       >
-        {/* 背景（パン＆ピンチズームのヒットエリア／pointerdownのみ、あとはwindowで処理） */}
-        <rect
-          width="100%" height="100%" fill="#EBEBEB"
-          onPointerDown={handleBgPointerDown}
-        />
+        {/* SVG背景（明示的に塗る） */}
+        <rect width="100%" height="100%" fill="#EBEBEB" />
 
-        <g transform={svgGroupTransform}>
+        <g transform={`translate(${tfm.x},${tfm.y}) scale(${tfm.scale})`}>
+
           {/* エッジ */}
           {edges.map((e) => (
             <path key={e.id} d={e.d} fill="none" stroke="#C4C4C4" strokeWidth={2} />
@@ -448,7 +393,23 @@ export default function OrgTree() {
             )
           })}
 
-          {/* オーバーレイ rect（ノードインタラクション） */}
+          {/* ノード（HTML描画、イベント無効） */}
+          {Object.values(members).map((m) => {
+            const pos = positions[m.id]
+            if (!pos) return null
+            return (
+              <foreignObject key={m.id} x={pos.x} y={pos.y} width={NODE_W} height={72}
+                style={{ overflow: 'visible', pointerEvents: 'none' }}>
+                <TreeNode
+                  member={m}
+                  isRoot={isRootNode(m, members)}
+                  isDragging={draggedDescendants.has(m.id) && !!drag}
+                />
+              </foreignObject>
+            )
+          })}
+
+          {/* オーバーレイ rect（全インタラクション） */}
           {Object.values(members).map((m) => {
             const pos = positions[m.id]
             if (!pos) return null
@@ -479,6 +440,7 @@ export default function OrgTree() {
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
               >
+                {/* ＋左 */}
                 {!cm.left && (
                   <g style={{ cursor: 'pointer' }} onClick={(e) => handleAddClick(e, id, 'left')}>
                     <circle cx={pos.x + NODE_W * 0.28} cy={pos.y + 72 + 22} r={14}
@@ -488,6 +450,7 @@ export default function OrgTree() {
                       style={{ pointerEvents: 'none' }}>+</text>
                   </g>
                 )}
+                {/* ＋右 */}
                 {!cm.right && (
                   <g style={{ cursor: 'pointer' }} onClick={(e) => handleAddClick(e, id, 'right')}>
                     <circle cx={pos.x + NODE_W * 0.72} cy={pos.y + 72 + 22} r={14}
@@ -497,6 +460,7 @@ export default function OrgTree() {
                       style={{ pointerEvents: 'none' }}>+</text>
                   </g>
                 )}
+                {/* 🗑️ */}
                 <g style={{ cursor: 'pointer' }} onClick={(e) => handleDeleteClick(e, id)}>
                   <circle cx={pos.x + NODE_W + 8} cy={pos.y - 8} r={13}
                     fill="white" stroke="#EF4444" strokeWidth={2} />
@@ -507,41 +471,17 @@ export default function OrgTree() {
               </g>
             )
           })()}
-        </g>
-      </svg>
-
-      {/* HTML ノードオーバーレイ（foreignObject の代替 — iOS Safari 対応）*/}
-      <div
-        style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'visible' }}
-        onDragStart={(e) => e.preventDefault()}
-      >
-        <div style={{
-          position: 'absolute', top: 0, left: 0,
-          transform: groupTransform,
-          transformOrigin: '0 0',
-        }}>
-          {Object.values(members).map((m) => {
-            const pos = positions[m.id]
-            if (!pos) return null
-            return (
-              <div key={m.id} style={{ position: 'absolute', left: pos.x, top: pos.y, pointerEvents: 'none' }}>
-                <TreeNode
-                  member={m}
-                  isRoot={isRootNode(m, members)}
-                  isDragging={draggedDescendants.has(m.id) && !!drag}
-                />
-              </div>
-            )
-          })}
 
           {/* ドラッグゴースト */}
           {drag && (
-            <div style={{ position: 'absolute', left: drag.ghostX, top: drag.ghostY, opacity: 0.75, pointerEvents: 'none' }}>
+            <foreignObject x={drag.ghostX} y={drag.ghostY} width={NODE_W} height={72}
+              style={{ opacity: 0.75, pointerEvents: 'none' }}>
               <TreeNode member={members[drag.id]} isRoot={false} isDragging={false} />
-            </div>
+            </foreignObject>
           )}
-        </div>
-      </div>
+
+        </g>
+      </svg>
     </div>
   )
 }
