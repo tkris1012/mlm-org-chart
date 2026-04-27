@@ -440,21 +440,7 @@ export default function OrgTree() {
             )
           })}
 
-          {/* ノード（HTML描画、イベント無効） */}
-          {Object.values(members).map((m) => {
-            const pos = positions[m.id]
-            if (!pos) return null
-            return (
-              <foreignObject key={m.id} x={pos.x} y={pos.y} width={NODE_W} height={72}
-                style={{ overflow: 'visible', pointerEvents: 'none' }}>
-                <TreeNode
-                  member={m}
-                  isRoot={isRootNode(m, members)}
-                  isDragging={draggedDescendants.has(m.id) && !!drag}
-                />
-              </foreignObject>
-            )
-          })}
+          {/* ノードは SVG 外の HTML オーバーレイで描画（iOS Safari foreignObject バグ回避） */}
 
           {/* オーバーレイ rect（全インタラクション） */}
           {Object.values(members).map((m) => {
@@ -520,16 +506,39 @@ export default function OrgTree() {
             )
           })()}
 
-          {/* ドラッグゴースト */}
-          {drag && (
-            <foreignObject x={drag.ghostX} y={drag.ghostY} width={NODE_W} height={72}
-              style={{ opacity: 0.75, pointerEvents: 'none' }}>
-              <TreeNode member={members[drag.id]} isRoot={false} isDragging={false} />
-            </foreignObject>
-          )}
+          {/* ドラッグゴーストも HTML オーバーレイで描画 */}
 
         </g>
       </svg>
+
+      {/* HTML ノードオーバーレイ（foreignObject の代替 — iOS Safari 対応）*/}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', top: 0, left: 0,
+          transform: `translate(${tfm.x}px, ${tfm.y}px) scale(${tfm.scale})`,
+          transformOrigin: '0 0',
+        }}>
+          {Object.values(members).map((m) => {
+            const pos = positions[m.id]
+            if (!pos) return null
+            return (
+              <div key={m.id} style={{ position: 'absolute', left: pos.x, top: pos.y, pointerEvents: 'none' }}>
+                <TreeNode
+                  member={m}
+                  isRoot={isRootNode(m, members)}
+                  isDragging={draggedDescendants.has(m.id) && !!drag}
+                />
+              </div>
+            )
+          })}
+          {/* ドラッグゴースト */}
+          {drag && (
+            <div style={{ position: 'absolute', left: drag.ghostX, top: drag.ghostY, opacity: 0.75, pointerEvents: 'none' }}>
+              <TreeNode member={members[drag.id]} isRoot={false} isDragging={false} />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
