@@ -382,10 +382,24 @@ export default function OrgTree() {
       const x1 = pp.x + NODE_W / 2, y1 = pp.y + 72
       const x2 = cp.x + NODE_W / 2, y2 = cp.y
       const midY = (y1 + y2) / 2
-      lines.push({ id: m.id, d: `M${x1},${y1} L${x1},${midY} L${x2},${midY} L${x2},${y2}` })
+
+      // 親が単一子（このノードのみ）の場合は、左右どちらか側に屈曲を入れる
+      const parentChildren = childMap[m.parentId] || {}
+      const onlyChild = !!parentChildren.left !== !!parentChildren.right
+
+      let d
+      if (onlyChild) {
+        // 子の上端の左寄り or 右寄りに侵入させて、左右どちらに付いてるかを線で表現
+        const isLeftSlot = m.position === 'left'
+        const entryX = isLeftSlot ? cp.x + NODE_W * 0.25 : cp.x + NODE_W * 0.75
+        d = `M${x1},${y1} L${x1},${midY} L${entryX},${midY} L${entryX},${y2}`
+      } else {
+        d = `M${x1},${y1} L${x1},${midY} L${x2},${midY} L${x2},${y2}`
+      }
+      lines.push({ id: m.id, d })
     })
     return lines
-  }, [members, positions])
+  }, [members, positions, childMap])
 
   const drag            = dragRef.current
   const activeControlId = hoveredId || longPressId

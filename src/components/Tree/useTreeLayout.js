@@ -128,20 +128,17 @@ export function computeLayout(members, roleFilter = 'ALL') {
       return
     }
 
-    let lCol, rCol
-    if (left) {
+    if (left && right) {
+      // 両方いる：通常配置（左右に振り分け）
       process(left, depth + 1)
-      lCol = cols[left]
-    } else {
-      lCol = leafCounter++  // phantom left slot
-    }
-    if (right) {
       process(right, depth + 1)
-      rCol = cols[right]
+      cols[id] = (cols[left] + cols[right]) / 2
     } else {
-      rCol = leafCounter++  // phantom right slot
+      // 片側だけ：親と同じ列（真下に縦配置）
+      const onlyChild = left ?? right
+      process(onlyChild, depth + 1)
+      cols[id] = cols[onlyChild]
     }
-    cols[id] = (lCol + rCol) / 2
   }
 
   roots.forEach((rootId, i) => {
