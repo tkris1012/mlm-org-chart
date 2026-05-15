@@ -2,21 +2,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // メンバー：オーナーは常時 read/write、共有有効時は誰でも read 可能
+    // 組織図メタ情報（タイトル等）
+    match /users/{uid}/charts/{chartId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      // 各組織図配下のメンバー
+      match /members/{memberId} {
+        allow read: if (request.auth != null && request.auth.uid == uid)
+                    || (exists(/databases/$(database)/documents/users/$(uid)/charts/$(chartId)/_meta/share)
+                        && get(/databases/$(database)/documents/users/$(uid)/charts/$(chartId)/_meta/share).data.enabled == true);
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // 各組織図の共有設定
+      match /_meta/share {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // 旧パス（後方互換 — 移行用に owner read/write のみ許可、最終的には削除予定）
     match /users/{uid}/members/{memberId} {
-      allow read: if (request.auth != null && request.auth.uid == uid)
-                  || (exists(/databases/$(database)/documents/users/$(uid)/_meta/share)
-                      && get(/databases/$(database)/documents/users/$(uid)/_meta/share).data.enabled == true);
-      allow write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid}/_meta/{doc} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // 共有設定：read は誰でも（enabled 確認のため）、write はオーナーのみ
-    match /users/{uid}/_meta/share {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid;
-    }
-
-    // 共有トークン：read は誰でも（uid 取得のため）、書き込みはトークンのオーナーのみ
+    // 共有トークン: token → { uid, chartId }
     match /shareTokens/{token} {
       allow read: if true;
       allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useReducer } from 'react'
 import { useStore } from '../../store/useStore.js'
+import { navigateToList } from '../../store/useSync.js'
 import { useTreeLayout, NODE_W, collectDescendants, getSlotPos } from './useTreeLayout.js'
 import { ROLE_RANK, FILTER_OPTIONS } from '../../constants/roles.js'
 import TreeNode from './TreeNode.jsx'
@@ -29,6 +30,11 @@ export default function OrgTree() {
   const setRoleFilter   = useStore((s) => s.setRoleFilter)
   const viewMode        = useStore((s) => s.viewMode)
   const isReadOnly      = viewMode === 'view'
+  const charts          = useStore((s) => s.charts)
+  const currentChartId  = useStore((s) => s.currentChartId)
+  const viewerChartTitle = useStore((s) => s.viewerChartTitle)
+  const currentChart    = charts.find((c) => c.id === currentChartId)
+  const chartTitle      = isReadOnly ? (viewerChartTitle || '') : (currentChart?.title || '')
 
   const { positions, childMap, hiddenChildrenMap } = useTreeLayout()
 
@@ -432,8 +438,39 @@ export default function OrgTree() {
         </div>
       )}
 
-      {/* フィルター（左上） */}
-      <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
+      {/* 左上ツールバー：一覧ボタン＋タイトル＋フィルター */}
+      <div style={{
+        position: 'absolute', top: 16, left: 16, zIndex: 10,
+        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      }}>
+        {/* 一覧へ戻るボタン（オーナーモードのみ） */}
+        {!isReadOnly && (
+          <button
+            onClick={navigateToList}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              background: 'white', border: '1px solid #D1D5DB', borderRadius: 8,
+              padding: '6px 10px', boxShadow: '0 1px 4px rgba(0,0,0,.10)',
+              cursor: 'pointer', fontSize: 13, color: '#374151', fontWeight: 600,
+            }}
+          >
+            ← 一覧
+          </button>
+        )}
+
+        {/* 現在の組織図タイトル */}
+        {chartTitle && (
+          <div style={{
+            background: 'white', border: '1px solid #D1D5DB', borderRadius: 8,
+            padding: '6px 12px', boxShadow: '0 1px 4px rgba(0,0,0,.10)',
+            fontSize: 14, fontWeight: 700, color: '#1F2937',
+            maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            🌳 {chartTitle}
+          </div>
+        )}
+
+        {/* フィルター */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
           background: 'white', border: '1px solid #D1D5DB', borderRadius: 8,

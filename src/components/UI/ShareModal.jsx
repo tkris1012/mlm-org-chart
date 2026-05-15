@@ -3,14 +3,15 @@ import { useStore } from '../../store/useStore.js'
 import { setShareEnabled, regenerateShareToken } from '../../lib/firestore.js'
 
 export default function ShareModal({ onClose }) {
-  const user        = useStore((s) => s.user)
-  const shareConfig = useStore((s) => s.shareConfig)
+  const user           = useStore((s) => s.user)
+  const currentChartId = useStore((s) => s.currentChartId)
+  const shareConfig    = useStore((s) => s.shareConfig)
   const setShareConfig = useStore((s) => s.setShareConfig)
 
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  if (!user) return null
+  if (!user || !currentChartId) return null
 
   const enabled = !!shareConfig?.enabled
   const token   = shareConfig?.token
@@ -21,7 +22,7 @@ export default function ShareModal({ onClose }) {
   async function handleToggle() {
     setBusy(true)
     try {
-      const next = await setShareEnabled(user.uid, !enabled)
+      const next = await setShareEnabled(user.uid, currentChartId, !enabled)
       setShareConfig(next)
     } catch (e) {
       console.error('toggle share failed', e)
@@ -35,7 +36,7 @@ export default function ShareModal({ onClose }) {
     if (!window.confirm('新しいURLを発行します。古いURLは使えなくなります。よろしいですか？')) return
     setBusy(true)
     try {
-      const next = await regenerateShareToken(user.uid)
+      const next = await regenerateShareToken(user.uid, currentChartId)
       setShareConfig(next)
     } catch (e) {
       console.error('regenerate failed', e)

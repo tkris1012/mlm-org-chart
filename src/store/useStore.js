@@ -1,5 +1,8 @@
 import { create } from 'zustand'
-import { addMember, updateMember, deleteMember, deleteMembers, restoreMember } from '../lib/firestore.js'
+import {
+  addMember, updateMember, deleteMember, deleteMembers, restoreMember,
+  createChart, renameChart, deleteChart,
+} from '../lib/firestore.js'
 
 const MAX_UNDO = 20
 
@@ -18,24 +21,19 @@ function collectDescendants(members, rootId) {
   return result
 }
 
-// 祖先IDセットを取得（循環参照チェック用）
-function getAncestors(members, id) {
-  const ancestors = new Set()
-  let cur = members[id]
-  while (cur?.parentId) {
-    ancestors.add(cur.parentId)
-    cur = members[cur.parentId]
-  }
-  return ancestors
-}
-
 export const useStore = create((set, get) => ({
   // --- Auth ---
   user: null,
   setUser: (user) => set({ user }),
 
-  // --- Members ---
-  members: {},          // { [id]: { id, name, role, photo, parentId, position } }
+  // --- Charts (組織図リスト) ---
+  charts: [],                          // [{ id, title, createdAt, updatedAt }]
+  setCharts: (charts) => set({ charts }),
+  currentChartId: null,                // 表示中の組織図ID（null = リスト画面）
+  setCurrentChartId: (id) => set({ currentChartId: id, undoStack: [] }),
+
+  // --- Members（現在の組織図のメンバー） ---
+  members: {},
   setMembers: (members) => set({ members }),
 
   // --- UI State ---
@@ -45,40 +43,41 @@ export const useStore = create((set, get) => ({
   panelOpen: false,
   setPanelOpen: (open) => set({ panelOpen: open }),
 
-  dragState: null,      // { dragId, overParentId, overPosition } | null
+  dragState: null,
   setDragState: (s) => set({ dragState: s }),
 
   // --- Sync Status ---
-  syncStatus: 'synced', // 'synced' | 'syncing'
+  syncStatus: 'synced',
   setSyncStatus: (s) => set({ syncStatus: s }),
 
   // --- Filter ---
-  roleFilter: 'ALL',  // 'ALL' | 'PDCM' | 'DCM' | 'ECM' | 'PM' | 'GM'
+  roleFilter: 'ALL',
   setRoleFilter: (f) => set({ roleFilter: f }),
 
   // --- View Mode ---
-  viewMode: 'owner',  // 'owner' | 'view'（共有リンクからアクセス時 'view'）
+  viewMode: 'owner',                   // 'owner' | 'view'
   setViewMode: (m) => set({ viewMode: m }),
-  viewerName: null,    // 閲覧モード時のオーナー表示名（任意）
+  viewerName: null,
   setViewerName: (n) => set({ viewerName: n }),
+  viewerChartTitle: null,              // 閲覧モード時の組織図タイトル
+  setViewerChartTitle: (t) => set({ viewerChartTitle: t }),
 
   // --- Share ---
-  shareConfig: null,  // { enabled, token } | null
+  shareConfig: null,                   // { enabled, token } | null
   setShareConfig: (c) => set({ shareConfig: c }),
 
-  // 閲覧者の折りたたみオーバーライド（Firestore に書き込まないローカル状態）
-  viewerCollapse: {},  // { [memberId]: boolean }
+  viewerCollapse: {},
   setViewerCollapse: (id, v) => set((s) => ({
     viewerCollapse: { ...s.viewerCollapse, [id]: v },
   })),
 
   // --- Confirm Dialog ---
-  confirm: null,        // { message, onOk } | null
+  confirm: null,
   showConfirm: (message, onOk) => set({ confirm: { message, onOk } }),
   closeConfirm: () => set({ confirm: null }),
 
   // --- Undo Stack ---
-  undoStack: [],        // [{ members }]
+  undoStack: [],
   pushUndo: () => {
     const { members, undoStack } = get()
     const snapshot = JSON.parse(JSON.stringify(members))
@@ -86,8 +85,8 @@ export const useStore = create((set, get) => ({
     set({ undoStack: next })
   },
   undo: async () => {
-    const { undoStack, user, setSyncStatus } = get()
-    if (!undoStack.length || !user) return
+    const { undoStack, user, currentChartId, setSyncStatus } = get()
+    if (!undoStack.length || !user || !currentChartId) return
 
     const [prev, ...rest] = undoStack
     const current = get().members
@@ -96,26 +95,22 @@ export const useStore = create((set, get) => ({
 
     setSyncStatus('syncing')
     try {
-      // 削除されたメンバーを復元、追加されたメンバーを削除、変更されたメンバーを更新
       const prevIds = new Set(Object.keys(prev))
-      const curIds = new Set(Object.keys(current))
+      const curIds  = new Set(Object.keys(current))
 
-      const toAdd = [...prevIds].filter((id) => !curIds.has(id))
+      const toAdd    = [...prevIds].filter((id) => !curIds.has(id))
       const toDelete = [...curIds].filter((id) => !prevIds.has(id))
       const toUpdate = [...prevIds].filter((id) => curIds.has(id))
 
       await Promise.all([
-        // 削除されていたメンバーを元のIDで復元
         ...toAdd.map((id) => {
           const { id: _id, ...data } = prev[id]
-          return restoreMember(user.uid, id, data)
+          return restoreMember(user.uid, currentChartId, id, data)
         }),
-        // 新規追加されたメンバーを削除
-        ...toDelete.map((id) => deleteMember(user.uid, id)),
-        // 変更されたメンバーを更新
+        ...toDelete.map((id) => deleteMember(user.uid, currentChartId, id)),
         ...toUpdate.map((id) => {
           const { id: _id, ...data } = prev[id]
-          return updateMember(user.uid, id, data)
+          return updateMember(user.uid, currentChartId, id, data)
         }),
       ])
     } catch (e) {
@@ -125,11 +120,65 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // --- Actions ---
+  // --- Chart Actions ---
+
+  createNewChart: async (title) => {
+    const { user, setSyncStatus } = get()
+    if (!user) return null
+    setSyncStatus('syncing')
+    try {
+      const id = await createChart(user.uid, title?.trim() || '新しい組織図')
+      return id
+    } catch (e) {
+      console.error('createChart failed', e)
+      return null
+    } finally {
+      setSyncStatus('synced')
+    }
+  },
+
+  renameCurrentChart: async (chartId, title) => {
+    const { user, setSyncStatus } = get()
+    if (!user) return
+    setSyncStatus('syncing')
+    try {
+      await renameChart(user.uid, chartId, title.trim() || '無題')
+    } catch (e) {
+      console.error('renameChart failed', e)
+    } finally {
+      setSyncStatus('synced')
+    }
+  },
+
+  deleteChartById: async (chartId) => {
+    const { user, setSyncStatus, closeConfirm, charts, currentChartId } = get()
+    if (!user) return
+    const chart = charts.find((c) => c.id === chartId)
+    if (!chart) return
+    get().showConfirm(
+      `「${chart.title}」を削除します。中身のメンバーも全て消えます。よろしいですか？`,
+      async () => {
+        closeConfirm()
+        setSyncStatus('syncing')
+        try {
+          await deleteChart(user.uid, chartId)
+          if (currentChartId === chartId) {
+            set({ currentChartId: null, members: {} })
+          }
+        } catch (e) {
+          console.error('deleteChart failed', e)
+        } finally {
+          setSyncStatus('synced')
+        }
+      }
+    )
+  },
+
+  // --- Member Actions ---
 
   addNode: async (parentId, position) => {
-    const { user, pushUndo, setSyncStatus } = get()
-    if (!user) return
+    const { user, currentChartId, pushUndo, setSyncStatus } = get()
+    if (!user || !currentChartId) return
 
     pushUndo()
     setSyncStatus('syncing')
@@ -145,7 +194,7 @@ export const useStore = create((set, get) => ({
     }
 
     try {
-      const newId = await addMember(user.uid, data)
+      const newId = await addMember(user.uid, currentChartId, data)
       set({ selectedId: newId, panelOpen: true })
     } catch (e) {
       console.error('addNode failed', e)
@@ -154,13 +203,11 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // ECM以上の下位表示／非表示トグル
   toggleCollapsed: async (memberId) => {
-    const { user, viewMode, members, viewerCollapse, setSyncStatus } = get()
+    const { user, viewMode, currentChartId, members, viewerCollapse, setSyncStatus } = get()
     const cur = members[memberId]
     if (!cur) return
 
-    // 閲覧モード：ローカルのオーバーライドだけ更新（Firestore は触らない）
     if (viewMode === 'view') {
       const curOverride = memberId in viewerCollapse ? viewerCollapse[memberId] : !!cur.collapsed
       set((s) => ({
@@ -169,15 +216,14 @@ export const useStore = create((set, get) => ({
       return
     }
 
-    // オーナーモード：Firestore へ永続化
-    if (!user) return
+    if (!user || !currentChartId) return
     const next = !cur.collapsed
     set((s) => ({
       members: { ...s.members, [memberId]: { ...s.members[memberId], collapsed: next } },
     }))
     setSyncStatus('syncing')
     try {
-      await updateMember(user.uid, memberId, { collapsed: next })
+      await updateMember(user.uid, currentChartId, memberId, { collapsed: next })
     } catch (e) {
       console.error('toggleCollapsed failed', e)
       set((s) => ({
@@ -189,8 +235,8 @@ export const useStore = create((set, get) => ({
   },
 
   deleteNode: async (targetId) => {
-    const { user, members, pushUndo, setSyncStatus, closeConfirm } = get()
-    if (!user) return
+    const { user, currentChartId, members, pushUndo, setSyncStatus, closeConfirm } = get()
+    if (!user || !currentChartId) return
 
     const descendants = collectDescendants(members, targetId)
     const allIds = [targetId, ...descendants]
@@ -205,7 +251,7 @@ export const useStore = create((set, get) => ({
         pushUndo()
         setSyncStatus('syncing')
         try {
-          await deleteMembers(user.uid, allIds)
+          await deleteMembers(user.uid, currentChartId, allIds)
           set((s) => {
             const next = { ...s.members }
             allIds.forEach((id) => delete next[id])
@@ -225,13 +271,13 @@ export const useStore = create((set, get) => ({
   },
 
   saveNode: async (memberId, data) => {
-    const { user, pushUndo, setSyncStatus } = get()
-    if (!user) return
+    const { user, currentChartId, pushUndo, setSyncStatus } = get()
+    if (!user || !currentChartId) return
 
     pushUndo()
     setSyncStatus('syncing')
     try {
-      await updateMember(user.uid, memberId, data)
+      await updateMember(user.uid, currentChartId, memberId, data)
       set((s) => ({
         members: {
           ...s.members,
@@ -246,17 +292,14 @@ export const useStore = create((set, get) => ({
   },
 
   moveNode: async (dragId, newParentId, newPosition) => {
-    const { user, members, pushUndo, setSyncStatus, closeConfirm } = get()
-    if (!user) return
+    const { user, currentChartId, members, pushUndo, setSyncStatus, closeConfirm } = get()
+    if (!user || !currentChartId) return
 
-    // ルートへの移動禁止
     if (newParentId === null) return
 
-    // 循環参照チェック（自分の子孫には移動不可）
     const descendants = new Set(collectDescendants(members, dragId))
     if (descendants.has(newParentId)) return
 
-    // 新しい親が既に左右両方埋まっているかチェック
     const siblings = Object.values(members).filter((m) => m.parentId === newParentId)
     const occupied = siblings.some((m) => m.id !== dragId && m.position === newPosition)
     if (occupied) return
@@ -275,7 +318,7 @@ export const useStore = create((set, get) => ({
         pushUndo()
         setSyncStatus('syncing')
         try {
-          await updateMember(user.uid, dragId, {
+          await updateMember(user.uid, currentChartId, dragId, {
             parentId: newParentId,
             position: newPosition,
           })
@@ -294,15 +337,14 @@ export const useStore = create((set, get) => ({
     )
   },
 
-  // ルートノードの追加（parentId=null）
   addRootNode: async () => {
-    const { user, pushUndo, setSyncStatus } = get()
-    if (!user) return
+    const { user, currentChartId, pushUndo, setSyncStatus } = get()
+    if (!user || !currentChartId) return
 
     pushUndo()
     setSyncStatus('syncing')
     try {
-      const newId = await addMember(user.uid, {
+      const newId = await addMember(user.uid, currentChartId, {
         name: '新メンバー',
         role: '',
         job: '',
