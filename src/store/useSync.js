@@ -6,12 +6,16 @@ import { useStore } from './useStore.js'
 import {
   migrateLegacyDataIfNeeded,
   subscribeCharts,
+  subscribeUserPlan,
+  subscribeUserRoles,
+  seedDefaultRolesIfNeeded,
   getShareTokenInfo,
   getShareConfig,
   subscribePublicMembers,
   subscribeShareConfig,
 } from '../lib/firestore.js'
 import { recordAccount } from '../lib/auth.js'
+import { DEFAULT_ROLES } from '../constants/roles.js'
 
 function readURL() {
   const params = new URLSearchParams(window.location.search)
@@ -46,10 +50,14 @@ export function useSync() {
   const setViewMode        = useStore((s) => s.setViewMode)
   const setShareConfig     = useStore((s) => s.setShareConfig)
   const setViewerChartTitle = useStore((s) => s.setViewerChartTitle)
+  const setPlan            = useStore((s) => s.setPlan)
+  const setRoles           = useStore((s) => s.setRoles)
 
   // ----- 1. 認証 + 組織図リストの購読、URL 解釈 -----
   useEffect(() => {
     let unsubCharts = null
+    let unsubPlan = null
+    let unsubRoles = null
     let viewerCleanup = null
 
     async function startShareView(token) {
@@ -79,17 +87,25 @@ export function useSync() {
       const unsubAuth = onAuthStateChanged(auth, async (user) => {
         setUser(user)
         if (unsubCharts) { unsubCharts(); unsubCharts = null }
+        if (unsubPlan)   { unsubPlan();   unsubPlan = null }
+        if (unsubRoles)  { unsubRoles();  unsubRoles = null }
         if (!user) {
           setCharts([])
           setMembers({})
+          setPlan('free')
+          setRoles([])
           return
         }
         // ログイン履歴に記録（この端末のみ・アカウント切替メニュー用）
         recordAccount(user)
         // 自動移行（旧スキーマ → 新スキーマ）
         try { await migrateLegacyDataIfNeeded(user.uid) } catch (e) { console.warn('migrate skipped', e) }
-        // 組織図リストを購読
+        // 既存アカウントにデフォルト役職をseed（新規は空のまま）
+        try { await seedDefaultRolesIfNeeded(user.uid, DEFAULT_ROLES) } catch (e) { console.warn('role seed skipped', e) }
+        // 組織図リスト・プラン・役職を購読
         unsubCharts = subscribeCharts(user.uid, setCharts)
+        unsubPlan   = subscribeUserPlan(user.uid, setPlan)
+        unsubRoles  = subscribeUserRoles(user.uid, setRoles)
       })
       return unsubAuth
     }
@@ -102,6 +118,8 @@ export function useSync() {
       if (viewerCleanup) { viewerCleanup(); viewerCleanup = null }
       if (unsubAuth)     { unsubAuth();     unsubAuth = null }
       if (unsubCharts)   { unsubCharts();   unsubCharts = null }
+      if (unsubPlan)     { unsubPlan();     unsubPlan = null }
+      if (unsubRoles)    { unsubRoles();    unsubRoles = null }
 
       if (shareToken) {
         startShareView(shareToken)
@@ -118,8 +136,10 @@ export function useSync() {
       if (viewerCleanup) viewerCleanup()
       if (unsubAuth)     unsubAuth()
       if (unsubCharts)   unsubCharts()
+      if (unsubPlan)     unsubPlan()
+      if (unsubRoles)    unsubRoles()
     }
-  }, [setUser, setMembers, setCharts, setViewMode, setViewerChartTitle])
+  }, [setUser, setMembers, setCharts, setViewMode, setViewerChartTitle, setPlan, setRoles])
 
   // ----- 2. URLの ?c=<chartId> を store の currentChartId に反映 -----
   useEffect(() => {

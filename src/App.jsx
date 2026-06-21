@@ -6,6 +6,8 @@ import DetailPanel from './components/Panel/DetailPanel.jsx'
 import ConfirmDialog from './components/UI/ConfirmDialog.jsx'
 import SyncStatus from './components/UI/SyncStatus.jsx'
 import ViewModeBanner from './components/UI/ViewModeBanner.jsx'
+import UpgradeModal from './components/UI/UpgradeModal.jsx'
+import RoleManager from './components/UI/RoleManager.jsx'
 import ChartListPage from './components/ChartList/ChartListPage.jsx'
 
 export default function App() {
@@ -36,6 +38,8 @@ export default function App() {
       <>
         <ChartListPage />
         {confirm && <ConfirmDialog />}
+        <UpgradeModal />
+        <RoleManager />
       </>
     )
   }
@@ -47,6 +51,8 @@ export default function App() {
       <DetailPanel />
       <SyncStatus />
       {confirm && <ConfirmDialog />}
+      <UpgradeModal />
+      <RoleManager />
     </div>
   )
 }
