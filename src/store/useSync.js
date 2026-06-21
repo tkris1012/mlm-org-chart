@@ -11,6 +11,7 @@ import {
   subscribePublicMembers,
   subscribeShareConfig,
 } from '../lib/firestore.js'
+import { recordAccount } from '../lib/auth.js'
 
 function readURL() {
   const params = new URLSearchParams(window.location.search)
@@ -83,6 +84,8 @@ export function useSync() {
           setMembers({})
           return
         }
+        // ログイン履歴に記録（この端末のみ・アカウント切替メニュー用）
+        recordAccount(user)
         // 自動移行（旧スキーマ → 新スキーマ）
         try { await migrateLegacyDataIfNeeded(user.uid) } catch (e) { console.warn('migrate skipped', e) }
         // 組織図リストを購読

@@ -9,8 +9,17 @@ export default function DetailPanel() {
   const setPanelOpen = useStore((s) => s.setPanelOpen)
   const members = useStore((s) => s.members)
   const saveNode = useStore((s) => s.saveNode)
+  const addNode = useStore((s) => s.addNode)
+  const deleteNode = useStore((s) => s.deleteNode)
 
   const member = selectedId ? members[selectedId] : null
+
+  // 子枠の埋まり具合（追加ボタンの有効/無効判定）
+  const children = selectedId
+    ? Object.values(members).filter((m) => m.parentId === selectedId)
+    : []
+  const hasLeft = children.some((m) => m.position === 'left')
+  const hasRight = children.some((m) => m.position === 'right')
 
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
@@ -72,6 +81,18 @@ export default function DetailPanel() {
 
   function handleClose() {
     setPanelOpen(false)
+  }
+
+  // 子メンバーを追加（追加後は新メンバーが選択され、このパネルがそのまま開く）
+  function handleAddChild(position) {
+    if (!selectedId) return
+    addNode(selectedId, position)
+  }
+
+  // このメンバーを削除（確認ダイアログ経由。配下も削除される）
+  function handleDeleteMember() {
+    if (!selectedId) return
+    deleteNode(selectedId)
   }
 
   return (
@@ -225,9 +246,40 @@ export default function DetailPanel() {
               <span style={{ fontSize: 14, color: style.text, fontWeight: 500 }}>{name || '（名前なし）'}</span>
             </div>
           </div>
+
+          {/* 操作（スマホでの追加・削除導線） */}
+          <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid #F0F0F0' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#6B7280', marginBottom: 10 }}>操作</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <button
+                onClick={() => handleAddChild('left')}
+                disabled={hasLeft}
+                style={addBtnStyle(hasLeft)}
+              >
+                ＋ 左に追加
+              </button>
+              <button
+                onClick={() => handleAddChild('right')}
+                disabled={hasRight}
+                style={addBtnStyle(hasRight)}
+              >
+                ＋ 右に追加
+              </button>
+            </div>
+            <button
+              onClick={handleDeleteMember}
+              style={{
+                width: '100%', padding: '10px', borderRadius: 8,
+                border: '1px solid #FCA5A5', background: 'white',
+                fontSize: 14, cursor: 'pointer', color: '#EF4444', fontWeight: 600,
+              }}
+            >
+              🗑️ このメンバーを削除
+            </button>
+          </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer (編集の保存/キャンセル) */}
         <div style={{ padding: '16px 20px', borderTop: '1px solid #F0F0F0', display: 'flex', gap: 10 }}>
           <button
             onClick={handleClose}
@@ -255,4 +307,15 @@ export default function DetailPanel() {
       </div>
     </>
   )
+}
+
+function addBtnStyle(disabled) {
+  return {
+    flex: 1, padding: '10px', borderRadius: 8,
+    border: '1px solid #A7F3D0',
+    background: disabled ? '#F3F4F6' : 'white',
+    fontSize: 14, fontWeight: 600,
+    color: disabled ? '#9CA3AF' : '#059669',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  }
 }
