@@ -88,13 +88,12 @@ export async function deleteChart(uid, chartId) {
   const memSnap = await getDocs(membersCol(uid, chartId))
   const batch = writeBatch(db)
   memSnap.forEach((m) => batch.delete(m.ref))
-  // 共有設定削除
-  batch.delete(shareConfigDoc(uid, chartId))
-  // 共有トークン削除
+  // 共有設定・トークンは「存在する場合のみ」削除（未共有の組織図で不要な書込み＝ルール違反を避ける）
   try {
     const shareSnap = await getDoc(shareConfigDoc(uid, chartId))
-    if (shareSnap.exists() && shareSnap.data().token) {
-      batch.delete(shareTokenDoc(shareSnap.data().token))
+    if (shareSnap.exists()) {
+      if (shareSnap.data().token) batch.delete(shareTokenDoc(shareSnap.data().token))
+      batch.delete(shareConfigDoc(uid, chartId))
     }
   } catch (_) { /* noop */ }
   // chart 本体削除
