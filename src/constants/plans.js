@@ -10,6 +10,7 @@ export const PLAN_ORDER = ['free', 'light', 'pro']
 
 // 制限値
 export const FREE_MEMBER_LIMIT = 30 // 無料：組織図あたりのメンバー上限
+export const CHART_LIMIT = { free: 1, light: 2, pro: Infinity } // 組織図の数
 export const UNDO_LIMIT = { free: 5, light: 20, pro: 20 }
 
 // === 機能ごとの利用可否 ======================================
@@ -22,10 +23,9 @@ export function canUseShare(plan) {
   return plan === 'pro'
 }
 
-// 複数の組織図：プロのみ無制限（無料・ライトは1つまで）
+// 組織図の数：無料1・ライト2・プロ無制限
 export function canCreateMoreCharts(plan, currentCount) {
-  if (plan === 'pro') return true
-  return currentCount < 1
+  return currentCount < (CHART_LIMIT[plan] ?? 1)
 }
 
 // メンバー追加：無料は30人まで、有料は無制限
