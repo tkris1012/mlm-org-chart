@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import { useStore } from '../../store/useStore.js'
 import { navigateToChart } from '../../store/useSync.js'
-import { auth } from '../../lib/firebase.js'
-import { signOut } from 'firebase/auth'
+import AccountMenu from '../Auth/AccountMenu.jsx'
 import CreateChartModal from './CreateChartModal.jsx'
 import RenameChartModal from './RenameChartModal.jsx'
 
 export default function ChartListPage() {
-  const user = useStore((s) => s.user)
   const charts = useStore((s) => s.charts)
   const createNewChart = useStore((s) => s.createNewChart)
   const deleteChartById = useStore((s) => s.deleteChartById)
@@ -51,19 +49,7 @@ export default function ChartListPage() {
         <div style={{ fontSize: 18, fontWeight: 700, color: '#1F2937', flex: 1 }}>
           🗂 組織図一覧
         </div>
-        {user?.photoURL && (
-          <button
-            onClick={() => signOut(auth)}
-            title="ログアウト"
-            style={{
-              width: 32, height: 32, borderRadius: '50%', overflow: 'hidden',
-              border: '1px solid #E5E7EB', cursor: 'pointer', padding: 0,
-              background: 'white',
-            }}
-          >
-            <img src={user.photoURL} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          </button>
-        )}
+        <AccountMenu />
       </header>
 
       {/* Body */}
