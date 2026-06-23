@@ -8,8 +8,8 @@
 // リンクを開くとき末尾に ?client_reference_id=<uid> を付けることで、
 // Webhook 側で「どのユーザーの支払いか」を判別できる。
 export const PAYMENT_LINKS = {
-  light: '', // ライトプラン (¥480) の Payment Link
-  pro: '',   // プロプラン (¥980) の Payment Link
+  light: 'https://buy.stripe.com/test_fZu3co6MAah01S49qg4Ja01', // ライトプラン (¥480)
+  pro:   'https://buy.stripe.com/test_28E7sE5Iw60K0O0dGw4Ja00', // プロプラン (¥980)
 }
 
 // 指定プランの決済 URL を組み立てる。リンク未設定なら null。
