@@ -146,6 +146,10 @@
     .feat-visual.img-cover { padding: 0; min-height: auto; border: none; box-shadow: none; background: transparent; }
     .feat-cover { width: 100%; height: 240px; object-fit: cover; border-radius: 14px; display: block;
       box-shadow: 0 10px 30px rgba(0,0,0,0.12); border: 1px solid var(--line); }
+    /* 画像主役の特徴ブロック（見出し・説明が画像内に含まれるもの） */
+    .feat-full { margin-bottom: 40px; }
+    .feat-full-img { width: 100%; height: auto; display: block; border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.10); border: 1px solid var(--line); }
 
     /* ===== Steps ===== */
     .steps-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
@@ -276,13 +280,8 @@
       <div class="eyebrow">TREEVIA でできること</div>
       <h2 class="title">バイナリーのための、シンプルな組織図。</h2>
 
-      <div class="feat">
-        <div class="feat-text">
-          <div class="feat-ic">🌲</div>
-          <h3>左右ツリーで直感的に</h3>
-          <p>バイナリーそのままの左右構造。＋ボタンで下の人を追加、ドラッグで組み替え。頭の中の組織図がそのまま形になります。</p>
-        </div>
-        <div class="feat-visual"><img src="illus-tree.png" alt="組織図を組み立てるイメージ" class="feat-illus" /></div>
+      <div class="feat-full">
+        <img src="feature-tree-full.jpg" alt="左右ツリーで直感的に — バイナリーそのままの左右構造。＋ボタンで下の人を追加、ドラッグで組み替え。頭の中の組織図がそのまま形になります。" class="feat-full-img" />
       </div>
 
       <div class="feat rev">
