@@ -18,8 +18,13 @@ export function isPaid(plan) {
   return plan === 'light' || plan === 'pro'
 }
 
-// 共有リンク：プロのみ
+// 共有リンク：全プランで利用可（成長ループのため開放）
 export function canUseShare(plan) {
+  return true
+}
+
+// 共有ページの透かし（Treevia の獲得CTA）を消せるのはプロのみ
+export function canRemoveShareBranding(plan) {
   return plan === 'pro'
 }
 

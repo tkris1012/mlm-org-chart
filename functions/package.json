@@ -1,0 +1,14 @@
+{
+  "name": "functions",
+  "description": "Stripe 決済 Webhook (Cloud Functions gen2)",
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "private": true,
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.4.0",
+    "firebase-admin": "^12.6.0",
+    "stripe": "^16.12.0"
+  }
+}
