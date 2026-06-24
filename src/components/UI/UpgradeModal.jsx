@@ -1,6 +1,6 @@
 import { useStore } from '../../store/useStore.js'
 import { PLANS, PLAN_ORDER, FREE_MEMBER_LIMIT } from '../../constants/plans.js'
-import { buildCheckoutUrl } from '../../constants/billing.js'
+import { buildCheckoutUrl, isBillingLive } from '../../constants/billing.js'
 
 const FEATURE_COPY = {
   members: {
@@ -98,6 +98,18 @@ function UpgradeButtons({ plan, user }) {
         background: '#ECFDF5', borderRadius: 8, padding: '10px', marginBottom: 4,
       }}>
         ✓ 最上位プランをご利用中です
+      </div>
+    )
+  }
+
+  // 本番決済が未開放の間は「準備中」表示にする
+  if (!isBillingLive()) {
+    return (
+      <div style={{
+        fontSize: 12, color: '#9CA3AF', textAlign: 'center',
+        background: '#F9FAFB', borderRadius: 8, padding: '10px', marginBottom: 4,
+      }}>
+        💳 オンライン決済は準備中です（まもなく開始）
       </div>
     )
   }
