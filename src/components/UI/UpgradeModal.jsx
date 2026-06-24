@@ -13,7 +13,11 @@ const FEATURE_COPY = {
   },
   share: {
     title: '共有リンクを使うには',
-    body: '読み取り専用の共有リンクはプロプランでご利用いただけます。',
+    body: '読み取り専用の共有リンクは、すべてのプランでご利用いただけます。',
+  },
+  branding: {
+    title: '共有ページの透かしを消すには',
+    body: '無料・ライトの共有ページには「Treevia で作成」の案内が表示されます。プロプランにすると非表示にできます。',
   },
   export: {
     title: 'エクスポートを使うには',
@@ -56,9 +60,9 @@ export default function UpgradeModal() {
 
         {/* プラン比較 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
-          <PlanRow name={PLANS.free.name}  price="¥0"    note="組織図1つ・30人まで" current={plan === 'free'} />
-          <PlanRow name={PLANS.light.name} price="¥480"  note="組織図2つ・人数無制限・写真" current={plan === 'light'} highlight />
-          <PlanRow name={PLANS.pro.name}   price="¥980"  note="組織図無制限・共有・エクスポート" current={plan === 'pro'} highlight />
+          <PlanRow name={PLANS.free.name}  price="¥0"    note="組織図1つ・30人・共有可" current={plan === 'free'} />
+          <PlanRow name={PLANS.light.name} price="¥480"  note="組織図2つ・人数無制限・写真・共有" current={plan === 'light'} highlight />
+          <PlanRow name={PLANS.pro.name}   price="¥980"  note="組織図無制限・透かしなし共有・エクスポート" current={plan === 'pro'} highlight />
         </div>
 
         {/* アップグレードボタン（現プランより上のプランのみ） */}

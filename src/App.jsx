@@ -5,6 +5,7 @@ import OrgTree from './components/Tree/OrgTree.jsx'
 import DetailPanel from './components/Panel/DetailPanel.jsx'
 import ConfirmDialog from './components/UI/ConfirmDialog.jsx'
 import ViewModeBanner from './components/UI/ViewModeBanner.jsx'
+import ShareFooterCTA from './components/UI/ShareFooterCTA.jsx'
 import UpgradeModal from './components/UI/UpgradeModal.jsx'
 import RoleManager from './components/UI/RoleManager.jsx'
 import ChartListPage from './components/ChartList/ChartListPage.jsx'
@@ -14,15 +15,19 @@ export default function App() {
   const viewMode       = useStore((s) => s.viewMode)
   const currentChartId = useStore((s) => s.currentChartId)
   const confirm        = useStore((s) => s.confirm)
+  const shareConfig    = useStore((s) => s.shareConfig)
 
   useSync()
 
   // 閲覧モード（共有リンクからのアクセス）
   if (viewMode === 'view') {
+    // branding が明示的に false（=Pro）のときだけ CTA を隠す
+    const showCTA = shareConfig?.branding !== false
     return (
       <div className="relative w-full h-full">
         <OrgTree />
         <ViewModeBanner />
+        {showCTA && <ShareFooterCTA />}
         {confirm && <ConfirmDialog />}
       </div>
     )

@@ -162,7 +162,10 @@ export async function getShareConfig(uid, chartId) {
   return snap.exists() ? snap.data() : null
 }
 
-export async function setShareEnabled(uid, chartId, enabled) {
+// branding=true のとき、共有ページに Treevia の獲得CTA（透かし）を表示する。
+// 公開ビューはオーナーの plan を直接読めないため、ここで share ドキュメントに
+// フラグを書き込んで非ログイン閲覧者にも判定できるようにする。
+export async function setShareEnabled(uid, chartId, enabled, branding = true) {
   const cur = await getShareConfig(uid, chartId)
   let token = cur?.token
   if (!token) {
@@ -172,12 +175,13 @@ export async function setShareEnabled(uid, chartId, enabled) {
   await setDoc(shareConfigDoc(uid, chartId), {
     enabled,
     token,
+    branding,
     updatedAt: serverTimestamp(),
   })
-  return { enabled, token }
+  return { enabled, token, branding }
 }
 
-export async function regenerateShareToken(uid, chartId) {
+export async function regenerateShareToken(uid, chartId, branding = true) {
   const cur = await getShareConfig(uid, chartId)
   if (cur?.token) {
     try { await deleteDoc(shareTokenDoc(cur.token)) } catch (_) { /* noop */ }
@@ -187,9 +191,10 @@ export async function regenerateShareToken(uid, chartId) {
   await setDoc(shareConfigDoc(uid, chartId), {
     enabled: true,
     token,
+    branding,
     updatedAt: serverTimestamp(),
   })
-  return { enabled: true, token }
+  return { enabled: true, token, branding }
 }
 
 export async function getShareTokenInfo(token) {

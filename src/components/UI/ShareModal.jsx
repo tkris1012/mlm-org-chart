@@ -1,20 +1,37 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '../../store/useStore.js'
 import { setShareEnabled, regenerateShareToken } from '../../lib/firestore.js'
+import { canRemoveShareBranding } from '../../constants/plans.js'
 
 export default function ShareModal({ onClose }) {
   const user           = useStore((s) => s.user)
   const currentChartId = useStore((s) => s.currentChartId)
   const shareConfig    = useStore((s) => s.shareConfig)
   const setShareConfig = useStore((s) => s.setShareConfig)
+  const plan           = useStore((s) => s.plan)
+  const showUpgrade    = useStore((s) => s.showUpgrade)
 
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  if (!user || !currentChartId) return null
-
   const enabled = !!shareConfig?.enabled
   const token   = shareConfig?.token
+  // Pro は透かしなし、それ以外は透かし(CTA)あり
+  const branding = !canRemoveShareBranding(plan)
+
+  // プラン変更（例: Pro へアップグレード）で透かしの要否が変わったら、
+  // 共有中のドキュメントに反映する。
+  useEffect(() => {
+    if (!user || !currentChartId) return
+    if (enabled && shareConfig && shareConfig.branding !== branding) {
+      setShareEnabled(user.uid, currentChartId, true, branding)
+        .then(setShareConfig)
+        .catch((e) => console.warn('branding sync failed', e))
+    }
+  }, [enabled, branding, shareConfig, user, currentChartId, setShareConfig])
+
+  if (!user || !currentChartId) return null
+
   const url = enabled && token
     ? `${window.location.origin}${window.location.pathname}?s=${token}`
     : ''
@@ -22,7 +39,7 @@ export default function ShareModal({ onClose }) {
   async function handleToggle() {
     setBusy(true)
     try {
-      const next = await setShareEnabled(user.uid, currentChartId, !enabled)
+      const next = await setShareEnabled(user.uid, currentChartId, !enabled, branding)
       setShareConfig(next)
     } catch (e) {
       console.error('toggle share failed', e)
@@ -36,7 +53,7 @@ export default function ShareModal({ onClose }) {
     if (!window.confirm('新しいURLを発行します。古いURLは使えなくなります。よろしいですか？')) return
     setBusy(true)
     try {
-      const next = await regenerateShareToken(user.uid, currentChartId)
+      const next = await regenerateShareToken(user.uid, currentChartId, branding)
       setShareConfig(next)
     } catch (e) {
       console.error('regenerate failed', e)
@@ -184,6 +201,31 @@ export default function ShareModal({ onClose }) {
             >
               新しい URL を発行（古いURLは使えなくなります）
             </button>
+
+            {/* 透かし（CTA）の案内 */}
+            {branding ? (
+              <div style={{
+                fontSize: 11, color: '#6B7280', lineHeight: 1.6,
+                background: '#F9FAFB', border: '1px solid #E5E7EB',
+                borderRadius: 8, padding: '8px 10px',
+              }}>
+                共有ページに「Treevia で作成・無料で作る」の案内が表示されます。{' '}
+                <button
+                  onClick={() => showUpgrade('branding')}
+                  style={{
+                    background: 'none', border: 'none', padding: 0,
+                    color: '#7C3AED', fontWeight: 700, cursor: 'pointer',
+                    textDecoration: 'underline', fontSize: 11,
+                  }}
+                >
+                  プロにすると非表示にできます
+                </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>
+                ✓ 透かしなしで共有されます（プロ）
+              </div>
+            )}
           </>
         )}
       </div>
