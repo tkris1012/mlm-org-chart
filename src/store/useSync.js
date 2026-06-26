@@ -11,6 +11,7 @@ import {
   seedDefaultRolesIfNeeded,
   getShareTokenInfo,
   getShareConfig,
+  getUserRoles,
   subscribePublicMembers,
   subscribeShareConfig,
 } from '../lib/firestore.js'
@@ -70,6 +71,8 @@ export function useSync() {
         const cfg = await getShareConfig(uid, chartId)
         if (!cfg?.enabled) { setMembers({}); console.warn('Share is disabled'); return }
         setShareConfig(cfg) // 閲覧モードでも branding 判定に使う
+        // オーナーの役職定義を読み込み、共有閲覧ページでも色・名称を正しく表示する
+        try { setRoles(await getUserRoles(uid)) } catch (_) { setRoles([]) }
         // chart のタイトルも取得（公開設定が有効ならルール上 chart 本体は読めない場合もあるので失敗OK）
         try {
           const chartSnap = await getDoc(doc(db, 'users', uid, 'charts', chartId))
