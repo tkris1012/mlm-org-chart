@@ -2,7 +2,7 @@
   "name": "functions",
   "description": "Stripe 決済 Webhook (Cloud Functions gen2)",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "private": true,
