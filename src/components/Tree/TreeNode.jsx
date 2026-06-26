@@ -2,13 +2,15 @@ import { getRoleStyle, roleName } from '../../constants/roles.js'
 import { useStore } from '../../store/useStore.js'
 import { NODE_W, NODE_H } from './useTreeLayout.js'
 
-export default function TreeNode({ member, isRoot, isDragging }) {
+export default function TreeNode({ member, isRoot, isDragging, forPrint = false }) {
   const roles = useStore((s) => s.roles)
   if (!member) return null
   const style = getRoleStyle(member.role, roles)
   const roleLabel = roleName(member.role, roles)
   const hasRole = !!roleLabel
   const hasJob  = !!member.job
+  // 印刷(html2canvas)では行の高さが詰まると文字の下が欠けるため、余裕を持たせる
+  const lh = forPrint ? 1.45 : 1.2
 
   return (
     <div
@@ -91,7 +93,7 @@ export default function TreeNode({ member, isRoot, isDragging }) {
               fontWeight: 500,
               color: style.sub,
               letterSpacing: '0.5px',
-              lineHeight: 1.2,
+              lineHeight: lh,
             }}
           >
             {roleLabel}
@@ -102,7 +104,8 @@ export default function TreeNode({ member, isRoot, isDragging }) {
             fontSize: 18,
             fontWeight: 500,
             color: style.text,
-            lineHeight: 1.2,
+            lineHeight: lh,
+            paddingBottom: forPrint ? 2 : 0,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -116,7 +119,7 @@ export default function TreeNode({ member, isRoot, isDragging }) {
               fontSize: 11,
               fontWeight: 400,
               color: style.sub,
-              lineHeight: 1.2,
+              lineHeight: lh,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
