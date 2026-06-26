@@ -30,17 +30,41 @@ export function estimatePages(contentW, contentH, options) {
   return cols * rows + 1 // +1 = 全体図ページ
 }
 
-async function captureRegion(html2canvas, element, x, y, width, height, contentW, contentH) {
+// キャンバスの安全上限（ブラウザの最大寸法/面積を考慮）
+const MAX_CANVAS_DIM = 16000
+const MAX_CANVAS_AREA = 256000000 // 256M px
+
+// 全体を1回だけ描画して大きな master canvas を得る（安全上限内に収まるよう scale 自動調整）
+async function captureMaster(html2canvas, element, contentW, contentH) {
+  let scale = CAPTURE_SCALE
+  scale = Math.min(
+    scale,
+    MAX_CANVAS_DIM / contentW,
+    MAX_CANVAS_DIM / contentH,
+    Math.sqrt(MAX_CANVAS_AREA / (contentW * contentH)),
+  )
+  if (!isFinite(scale) || scale <= 0) scale = 1
   const canvas = await html2canvas(element, {
-    x, y, width, height,
-    scale: CAPTURE_SCALE,
-    backgroundColor: '#ffffff',
+    width: contentW,
+    height: contentH,
     windowWidth: contentW,
     windowHeight: contentH,
+    scale,
+    backgroundColor: '#ffffff',
     logging: false,
     useCORS: true,
   })
-  return canvas.toDataURL('image/png')
+  return canvas
+}
+
+// master canvas の一部を切り出して dataURL にする（再描画せず drawImage で高速）
+function sliceDataURL(master, sx, sy, sw, sh) {
+  const tmp = document.createElement('canvas')
+  tmp.width = Math.max(1, Math.round(sw))
+  tmp.height = Math.max(1, Math.round(sh))
+  const ctx = tmp.getContext('2d')
+  ctx.drawImage(master, sx, sy, sw, sh, 0, 0, tmp.width, tmp.height)
+  return tmp.toDataURL('image/png')
 }
 
 // element（全体サイズで描画済みの非表示DOM）から PDF を生成して保存する。
@@ -54,9 +78,13 @@ export async function generateChartPdf({ element, contentWidth, contentHeight, o
   const { pageW, pageH, innerW, innerH } = pageContentMM(paper, orientation)
   const pdf = new jsPDF({ orientation, unit: 'mm', format: paper })
 
+  // ★ 全体を1回だけ描画（以降はこの canvas を切り出して使う）
+  const master = await captureMaster(html2canvas, element, contentWidth, contentHeight)
+  const sx = master.width / contentWidth   // content px → master px の係数
+  const sy = master.height / contentHeight
+
   if (mode === 'fit') {
-    // 全体を1ページに収める（縦横比維持で中央配置）
-    const img = await captureRegion(html2canvas, element, 0, 0, contentWidth, contentHeight, contentWidth, contentHeight)
+    const img = sliceDataURL(master, 0, 0, master.width, master.height)
     const scale = Math.min(innerW / (contentWidth * PX_TO_MM), innerH / (contentHeight * PX_TO_MM))
     const wmm = contentWidth * PX_TO_MM * scale
     const hmm = contentHeight * PX_TO_MM * scale
@@ -71,8 +99,8 @@ export async function generateChartPdf({ element, contentWidth, contentHeight, o
   const cols = Math.max(1, Math.ceil(contentWidth / tilePxW))
   const rows = Math.max(1, Math.ceil(contentHeight / tilePxH))
 
-  // 1ページ目：全体図（貼り合わせの見取り図。升目と番号つき）
-  const overview = await captureRegion(html2canvas, element, 0, 0, contentWidth, contentHeight, contentWidth, contentHeight)
+  // 1ページ目：全体図（升目と番号つき）
+  const overview = sliceDataURL(master, 0, 0, master.width, master.height)
   const ovScale = Math.min(innerW / (contentWidth * PX_TO_MM), innerH / (contentHeight * PX_TO_MM))
   const ovW = contentWidth * PX_TO_MM * ovScale
   const ovH = contentHeight * PX_TO_MM * ovScale
@@ -81,7 +109,6 @@ export async function generateChartPdf({ element, contentWidth, contentHeight, o
   pdf.addImage(overview, 'PNG', ovX, ovY, ovW, ovH)
   pdf.setFontSize(10)
   pdf.text(`全体図（${cols}×${rows} 枚に分割／次ページから各ページ）`, MARGIN_MM, MARGIN_MM)
-  // 升目と番号を重ねる
   pdf.setDrawColor(150)
   pdf.setTextColor(120)
   for (let r = 0; r < rows; r++) {
@@ -94,7 +121,7 @@ export async function generateChartPdf({ element, contentWidth, contentHeight, o
   }
   pdf.setTextColor(0)
 
-  // 各タイルを1ページずつ
+  // 各タイル：master から切り出すだけ（再描画なし）
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const x = c * tilePxW
@@ -102,12 +129,9 @@ export async function generateChartPdf({ element, contentWidth, contentHeight, o
       const w = Math.min(tilePxW, contentWidth - x)
       const h = Math.min(tilePxH, contentHeight - y)
       if (w <= 0 || h <= 0) continue
-      const img = await captureRegion(html2canvas, element, x, y, w, h, contentWidth, contentHeight)
+      const img = sliceDataURL(master, x * sx, y * sy, w * sx, h * sy)
       pdf.addPage(paper, orientation)
-      const wmm = w * PX_TO_MM
-      const hmm = h * PX_TO_MM
-      pdf.addImage(img, 'PNG', MARGIN_MM, MARGIN_MM, wmm, hmm)
-      // ページ番号（貼り合わせ用）
+      pdf.addImage(img, 'PNG', MARGIN_MM, MARGIN_MM, w * PX_TO_MM, h * PX_TO_MM)
       pdf.setFontSize(9)
       pdf.setTextColor(120)
       pdf.text(`${String.fromCharCode(65 + c)}-${r + 1}`, MARGIN_MM, MARGIN_MM - 2.5)
