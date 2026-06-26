@@ -188,7 +188,7 @@ export default function PrintModal({ onClose }) {
           if (!m) return null
           return (
             <div key={id} style={{ position: 'absolute', left: p.x + ox, top: p.y + oy, width: NODE_W }}>
-              <TreeNode member={m} isRoot={isRoot(m)} />
+              <TreeNode member={m} isRoot={isRoot(m)} forPrint />
             </div>
           )
         })}
