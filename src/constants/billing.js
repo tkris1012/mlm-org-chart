@@ -17,7 +17,7 @@ export function isBillingLive() {
 }
 
 export const PAYMENT_LINKS = {
-  light: 'https://buy.stripe.com/aFa9AV5V41nraRx5lNfnO00', // ライトプラン (¥480) 本番
+  light: 'https://buy.stripe.com/7sY4gBfvEead3p529BfnO02', // ライトプラン (¥380) 本番
   pro:   'https://buy.stripe.com/bJe6oJ4R0aY1f7N8xZfnO01', // プロプラン (¥980) 本番
 }
 
