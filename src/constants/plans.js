@@ -1,8 +1,8 @@
 // === 料金プラン定義 ==========================================
-// 無料 / ライト(¥480) / プロ(¥980)
+// 無料 / ライト(¥380) / プロ(¥980)
 export const PLANS = {
   free:  { id: 'free',  name: '無料',   price: 0 },
-  light: { id: 'light', name: 'ライト', price: 480 },
+  light: { id: 'light', name: 'ライト', price: 380 },
   pro:   { id: 'pro',   name: 'プロ',   price: 980 },
 }
 
