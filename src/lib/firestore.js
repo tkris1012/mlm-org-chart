@@ -46,6 +46,16 @@ export async function saveUserRoles(uid, list) {
   await setDoc(rolesDoc(uid), { list, updatedAt: serverTimestamp() })
 }
 
+// 単発取得（共有閲覧ページでオーナーの役職の色・名称を表示するため）
+export async function getUserRoles(uid) {
+  try {
+    const snap = await getDoc(rolesDoc(uid))
+    return snap.exists() && Array.isArray(snap.data().list) ? snap.data().list : []
+  } catch (_) {
+    return []
+  }
+}
+
 // 既存アカウント（組織図を持つ）には初回のみデフォルト役職をseed。新規は空のまま。
 export async function seedDefaultRolesIfNeeded(uid, defaultRoles) {
   const snap = await getDoc(rolesDoc(uid))

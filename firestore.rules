@@ -36,6 +36,13 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
+    // 役職定義（色・名称）は共有閲覧ページでの表示に使うため公開読み取り可。
+    // 書込みは本人のみ。役職は表示メタ情報で、メンバーの個人情報は含まない。
+    match /users/{uid}/_meta/roles {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
     // 共有トークン: token → { uid, chartId }
     match /shareTokens/{token} {
       allow read: if true;
